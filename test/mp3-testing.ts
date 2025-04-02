@@ -20,7 +20,8 @@ async function processWithHelper(mp3Path: string): Promise<void> {
       negativeSpeechThreshold: 0.3,
 
       // MP3 processing options
-      saveWavFiles: true,
+      saveFiles: true,
+      saveFormat: 'mp3',
       outputDir: path.join(process.cwd(), 'output'),
       filePrefix: 'speech',
     })
@@ -36,8 +37,8 @@ async function processWithHelper(mp3Path: string): Promise<void> {
         `Speech segment ${i + 1}: Start=${segment.start.toFixed(0)}ms, End=${segment.end.toFixed(0)}ms, Duration=${durationMs.toFixed(0)}ms, Samples=${segment.audio.length}`,
       )
 
-      if (result.wavFiles) {
-        console.log(`  Saved as: ${result.wavFiles[i]}`)
+      if (result.outputFiles) {
+        console.log(`  Saved as: ${result.outputFiles[i]}`)
       }
     })
   } catch (error) {

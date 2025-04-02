@@ -7,11 +7,13 @@ import { VAD, type SpeechSegment, type VADOptions, TARGET_SAMPLE_RATE } from './
  * Options for MP3 processing
  */
 export interface ProcessMP3Options extends Partial<VADOptions> {
-  /** Whether to save audio segments as WAV files */
-  saveWavFiles?: boolean
-  /** Directory to save WAV files (defaults to current working directory) */
+  /** Whether to save audio segments as files */
+  saveFiles?: boolean
+  /** Format for saving audio files (default: 'wav') */
+  saveFormat?: 'wav' | 'mp3'
+  /** Directory to save audio files (defaults to current working directory) */
   outputDir?: string
-  /** Prefix for WAV filenames */
+  /** Prefix for output filenames */
   filePrefix?: string
 }
 
@@ -21,8 +23,8 @@ export interface ProcessMP3Options extends Partial<VADOptions> {
 export interface ProcessMP3Result {
   /** Detected speech segments */
   segments: SpeechSegment[]
-  /** Paths to saved WAV files (if saveWavFiles is true) */
-  wavFiles?: string[]
+  /** Paths to saved audio files (if saveFiles is true) */
+  outputFiles?: string[]
   /** Total processing time in milliseconds */
   processingTime: number
   /** Original audio data */
@@ -171,6 +173,86 @@ export async function saveWavFile(
 }
 
 /**
+ * Save audio segment to an MP3 file using lame
+ * @param audio Audio data as Float32Array
+ * @param index Segment index
+ * @param sampleRate Sample rate in Hz
+ * @param options Output options
+ * @returns Path to the saved MP3 file
+ */
+export async function saveMP3File(
+  audio: Float32Array,
+  index: number,
+  sampleRate: number,
+  options: { outputDir?: string; filePrefix?: string } = {},
+): Promise<string> {
+  // Create temporary PCM file
+  const tempPcmPath = path.join(
+    options.outputDir || process.cwd(),
+    `temp_${options.filePrefix || 'segment'}_${index}.pcm`,
+  )
+
+  // Determine output directory
+  const outputDir = options.outputDir || process.cwd()
+  const prefix = options.filePrefix || 'segment'
+
+  // Ensure the output directory exists
+  await fs.mkdir(outputDir, { recursive: true })
+
+  // Convert Float32Array to 16-bit PCM buffer
+  const buffer = Buffer.alloc(audio.length * 2)
+  for (let i = 0; i < audio.length; i++) {
+    // Clamp to [-1.0, 1.0] and convert to 16-bit
+    const sample = Math.max(-1.0, Math.min(1.0, audio[i]!))
+    buffer.writeInt16LE(Math.floor(sample * 32767), i * 2)
+  }
+
+  // Write PCM to temporary file
+  await fs.writeFile(tempPcmPath, buffer)
+
+  // Prepare MP3 output path
+  const outputPath = path.join(outputDir, `${prefix}_${index}.mp3`)
+
+  // Use lame to convert PCM to MP3
+  return new Promise((resolve, reject) => {
+    const lame = spawn('lame', [
+      '-r', // Input is raw PCM
+      '--little-endian', // Input is little-endian
+      '--signed', // Input is signed
+      '--bitwidth',
+      '16', // Input is 16-bit
+      '-s',
+      sampleRate.toString(), // Input sample rate
+      '-m',
+      'm', // Mono mode
+      '-q',
+      '4', // Quality setting
+      tempPcmPath, // Input file
+      outputPath, // Output file
+    ])
+
+    lame.on('close', async (code) => {
+      try {
+        // Clean up temporary PCM file
+        await fs.unlink(tempPcmPath)
+
+        if (code === 0) {
+          resolve(outputPath)
+        } else {
+          reject(new Error(`lame encoder exited with code ${code}`))
+        }
+      } catch (err) {
+        reject(err)
+      }
+    })
+
+    lame.on('error', (err) => {
+      reject(new Error(`Failed to encode MP3: ${err.message}`))
+    })
+  })
+}
+
+/**
  * Process an MP3 file with the VAD
  *
  * @param mp3Path Path to the MP3 file
@@ -188,19 +270,33 @@ export async function processMP3File(mp3Path: string, options: ProcessMP3Options
     // Process the audio with the VAD
     const startTime = Date.now()
     const segments: SpeechSegment[] = []
-    const wavFiles: string[] = []
+    const outputFiles: string[] = []
+
+    // Default to WAV format if not specified
+    const saveFormat = options.saveFormat || 'wav'
 
     // Collect all segments
     for await (const segment of vad.run(audioData, sampleRate)) {
       segments.push(segment)
 
-      // Save WAV file if requested
-      if (options.saveWavFiles) {
-        const wavPath = await saveWavFile(segment.audio, segments.length, TARGET_SAMPLE_RATE, {
-          outputDir: options.outputDir,
-          filePrefix: options.filePrefix,
-        })
-        wavFiles.push(wavPath)
+      // Save audio file if requested
+      if (options.saveFiles) {
+        let outputPath: string
+
+        // Save file based on selected format
+        if (saveFormat === 'mp3') {
+          outputPath = await saveMP3File(segment.audio, segments.length, TARGET_SAMPLE_RATE, {
+            outputDir: options.outputDir,
+            filePrefix: options.filePrefix,
+          })
+        } else {
+          outputPath = await saveWavFile(segment.audio, segments.length, TARGET_SAMPLE_RATE, {
+            outputDir: options.outputDir,
+            filePrefix: options.filePrefix,
+          })
+        }
+
+        outputFiles.push(outputPath)
       }
     }
 
@@ -209,7 +305,7 @@ export async function processMP3File(mp3Path: string, options: ProcessMP3Options
     // Return the results
     return {
       segments,
-      wavFiles: options.saveWavFiles ? wavFiles : undefined,
+      outputFiles: options.saveFiles ? outputFiles : undefined,
       processingTime,
       audioData,
       sampleRate,
@@ -231,7 +327,7 @@ export function checkLameInstallation(): Promise<void> {
     process.on('error', () => {
       reject(
         new Error(
-          'Error: lame is not installed or not in PATH. Please install lame (e.g., brew install lame on macOS)',
+          'Error: lame is not installed or not in PATH. Please install lame for MP3 encoding/decoding (e.g., brew install lame on macOS)',
         ),
       )
     })
