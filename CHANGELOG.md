@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/adjustleads/vad-node/compare/vad-node-v0.1.1...vad-node-v0.1.2) (2025-04-02)
+
+
+### Bug Fixes
+
+* trigger release ([fbf34cd](https://github.com/adjustleads/vad-node/commit/fbf34cd0a7aaeceb90330366de4891fedd8d4f5b))
+
 ## [0.1.1](https://github.com/adjustleads/vad-node/compare/vad-node-v0.1.0...vad-node-v0.1.1) (2025-04-02)
 
 
