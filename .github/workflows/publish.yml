@@ -70,4 +70,4 @@ jobs:
       - name: Publish to GitHub Packages
         run: bun publish --no-git-checks # Use bun publish, skip git checks as version is set
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_TOKEN: ${{ secrets.GITHUB_TOKEN }} # https://github.com/oven-sh/bun/discussions/5365
