@@ -18,11 +18,11 @@
     "url": "https://github.com/adjustleads/vad-node.git"
   },
   "engines": {
-    "node": ">=23"
+    "node": ">=20"
   },
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts --clean",
-    "prepare": "npm run build"
+    "prepare": "husky"
   },
   "files": [
     "dist",
@@ -30,6 +30,7 @@
   ],
   "devDependencies": {
     "@types/bun": "latest",
+    "husky": "^9.1.7",
     "prettier": "^3.5.3",
     "tsup": "^8.4.0"
   },

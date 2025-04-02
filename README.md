@@ -1,212 +1,207 @@
 # Voice Activity Detection (VAD) for Node.js
 
-A Node.js library for Voice Activity Detection using the Silero VAD model.
+A Node.js library for Voice Activity Detection (VAD) using the Silero VAD model, designed for easy integration into Node.js applications. This package includes pre-built distribution files for straightforward usage directly from GitHub.
 
 ## Installation
 
-**Note:** This installs directly from the `main` branch on GitHub. This means you get the latest code, but it might not be a stable release.
+You can install this package directly from the `main` branch on GitHub. Since the compiled JavaScript files (`dist/` directory) are included in the repository, no build step is required after installation.
 
 ```bash
-# Installs from the main branch and automatically builds the package
+# Installs from the main branch (includes pre-built files)
 npm install adjustleads/vad-node
 
-# Or specify a specific commit or tag if needed
+# Or specify a specific commit hash or tag if needed
 # npm install adjustleads/vad-node#<commit-hash-or-tag>
 ```
 
-Alternatively, clone the repository and build it yourself (see Development).
+**Note:** Installing directly from `main` gives you the latest code, which might not always correspond to a stable, tagged release.
+
+Alternatively, for development purposes, clone the repository (see Development section).
 
 ## Dependencies
 
-- [onnxruntime-node](https://www.npmjs.com/package/onnxruntime-node): For running the ONNX model
-- [lame](http://lame.sourceforge.net/): Required for MP3 processing (must be installed system-wide)
+- **[onnxruntime-node](https://www.npmjs.com/package/onnxruntime-node):** Required for running the Silero VAD ONNX model. This is listed as a peer dependency and needs to be installed alongside this package.
+- **[lame](http://lame.sourceforge.net/):** (Optional) Required _only_ if you use the `processMP3File` function. It must be installed system-wide (e.g., via `apt install lame`, `brew install lame`).
+
+Ensure you install the peer dependency:
+
+```bash
+npm install onnxruntime-node
+```
 
 ## Basic Usage
 
 ```javascript
-const fs = require('fs')
-const { VAD } = require('@adjustleads/vad-node')
+const { VAD } = require('@adjustleads/vad-node') // Use the package name as defined in package.json
+const fs = require('fs') // Example for loading audio data
 
 async function detectSpeech() {
-  // Create a VAD instance
-  const vad = await VAD.create({
-    // Optional: Override default options
-    positiveSpeechThreshold: 0.6,
-    modelPath: 'path/to/silero_vad.onnx', // Default: './silero_vad.onnx'
-  })
+  try {
+    // Create a VAD instance with default or custom options
+    const vad = await VAD.create({
+      modelPath: 'node_modules/@adjustleads/vad-node/silero_vad.onnx', // Default path relative to execution
+      // Optional overrides:
+      // positiveSpeechThreshold: 0.6,
+      // negativeSpeechThreshold: 0.4,
+      // minSpeechFrames: 4,
+      // preSpeechPadFrames: 2,
+      // redemptionFrames: 8
+    })
 
-  // Load audio data (Float32Array)
-  // This is a placeholder - you would load your audio data here
-  const audioData = new Float32Array(16000 * 5) // 5 seconds of 16kHz audio
-  const sampleRate = 44100 // Original sample rate
+    // --- Placeholder: Load your audio data ---
+    // Audio must be a Float32Array.
+    // The VAD processor expects 16kHz mono audio internally.
+    // Provide the original sample rate; the library handles resampling.
+    const originalSampleRate = 44100 // Your audio's sample rate
+    // Example: 5 seconds of dummy 44.1kHz audio data
+    const audioDurationSeconds = 5
+    const audioData = new Float32Array(originalSampleRate * audioDurationSeconds)
+    // In a real scenario, load from a file or stream:
+    // const audioBuffer = fs.readFileSync('path/to/your/audio.wav');
+    // const audioData = /* Decode audioBuffer to Float32Array */;
+    // --- End Placeholder ---
 
-  // Process audio to detect speech segments
-  let segmentCount = 0
-  for await (const { audio, start, end } of vad.run(audioData, sampleRate)) {
-    segmentCount++
-    console.log(`Speech segment ${segmentCount}:`)
-    console.log(`- Start: ${start.toFixed(0)}ms`)
-    console.log(`- End: ${end.toFixed(0)}ms`)
-    console.log(`- Length: ${audio.length} samples`)
+    console.log(`Processing ${audioData.length} samples at ${originalSampleRate} Hz...`)
 
-    // You can process or save the speech segments here
+    // Process audio data asynchronously to get speech segments
+    let segmentCount = 0
+    for await (const { audio, start, end } of vad.run(audioData, originalSampleRate)) {
+      segmentCount++
+      console.log(`
+Speech Segment ${segmentCount}:`)
+      console.log(` - Start Time: ${start.toFixed(0)} ms`)
+      console.log(` - End Time: ${end.toFixed(0)} ms`)
+      console.log(` - Segment Length: ${audio.length} samples (at 16kHz)`)
+
+      // 'audio' contains the Float32Array data for the detected speech segment (at 16kHz)
+      // You can now process, analyze, or save this segment.
+      // Example: saveSegmentToFile(audio, segmentCount);
+    }
+
+    if (segmentCount === 0) {
+      console.log('No speech segments detected.')
+    }
+  } catch (error) {
+    console.error('An error occurred during VAD processing:', error)
   }
 }
 
-detectSpeech().catch(console.error)
+detectSpeech()
 ```
 
-## MP3 Processing
+_Note:_ Adjust the `modelPath` in `VAD.create` if `silero_vad.onnx` is not located at the default path relative to where your script is run. It's included in the package, so referencing it within `node_modules` is often reliable.
 
-The library includes built-in support for processing MP3 files:
+## MP3 Processing (Optional)
+
+The library includes a utility function to process MP3 files directly, provided `lame` is installed on your system.
 
 ```javascript
-const { processMP3File, checkLameInstallation } = require('@adjustleads/vad-node')
+const { processMP3File, checkLameInstallation } = require('@adjustleads/vad-node');
+const path = require('path');
 
 async function processSpeechInMP3() {
-  try {
-    // Check if lame is installed (optional)
-    await checkLameInstallation()
+  const mp3FilePath = 'path/to/your/audio.mp3'; // Specify the path to your MP3 file
+  const outputDirectory = './segments'; // Directory to save detected segments
 
-    // Process an MP3 file and get speech segments
-    const result = await processMP3File('path/to/audio.mp3', {
-      // VAD options
-      positiveSpeechThreshold: 0.6,
-      negativeSpeechThreshold: 0.4,
+  try {
+    // 1. Check if lame is installed (optional but recommended)
+    await checkLameInstallation();
+    console.log("LAME installation confirmed.");
+
+    // Ensure output directory exists
+    // await fs.promises.mkdir(outputDirectory, { recursive: true }); // Requires Node.js v10+
+
+    // 2. Process the MP3 file
+    console.log(`Processing MP3 file: ${mp3FilePath}`);
+    const result = await processMP3File(mp3FilePath, {
+      // VAD options (can override defaults)
+      // positiveSpeechThreshold: 0.6,
 
       // MP3 processing options
-      saveFiles: true, // Save segments as MP3 files
-      outputDir: './segments', // Directory to save MP3 files
-      filePrefix: 'speech', // Prefix for MP3 filenames
-    })
+      saveFiles: true,           // Save detected segments as separate MP3 files
+      outputDir: outputDirectory, // Directory to save the files
+      filePrefix: 'speech_segment', // Prefix for the output filenames
+    });
 
-    // Display results
-    console.log(`Found ${result.segments.length} speech segments`)
-    console.log(`Processing time: ${result.processingTime}ms`)
+    // 3. Display results
+    console.log(`
+Processing complete. Found ${result.segments.length} speech segments.`);
+    console.log(`Total processing time: ${result.processingTime} ms`);
 
-    // Each segment has audio data, start and end times
     result.segments.forEach((segment, i) => {
-      console.log(`Segment ${i + 1}: ${segment.start.toFixed(0)}ms - ${segment.end.toFixed(0)}ms`)
+      console.log(` - Segment ${i + 1}: ${segment.start.toFixed(0)}ms - ${segment.end.toFixed(0)}ms`);
+      // 'segment.audio' contains the Float32Array data (16kHz mono)
+    });
 
-      // If saveFiles was true, you can access the saved file paths
-      if (result.outputFiles) {
-        console.log(`  Saved as: ${result.outputFiles[i]}`)
-      }
-    })
+    if (result.outputFiles && result.outputFiles.length > 0) {
+      console.log(`
+Segments saved to: ${outputDirectory}`);
+      result.outputFiles.forEach((filePath, i) => {
+        console.log(` - ${path.basename(filePath)}`);
+      });
+    }
+
   } catch (error) {
-    console.error('Error:', error.message)
+    console.error('
+Error during MP3 processing:', error.message);
+    if (error.message.includes('lame command failed')) {
+        console.error("Ensure 'lame' is installed and accessible in your system's PATH.");
+    }
   }
 }
 
-processSpeechInMP3()
+processSpeechInMP3();
 ```
 
-## Architecture and Data Flow
+## Architecture Overview
 
-The library is designed around a pipeline that processes audio data to detect speech segments. Here's how the components work together:
+The library uses the following main components:
 
-### 1. VAD
+1.  **`VAD` Class:** Main entry point. Manages configuration and orchestrates the processing pipeline.
+2.  **`SileroVad` Class:** Wraps the ONNX runtime session, loads the `silero_vad.onnx` model, and performs inference on audio frames.
+3.  **`FrameProcessor` Class:** Takes audio chunks, manages resampling (if necessary) to the required 16kHz, frames the audio, sends frames to `SileroVad`, and applies the core VAD logic (thresholding, silence detection, segment buffering).
+4.  **`Resampler` Class:** Handles downsampling audio to 16kHz if the input sample rate differs.
+5.  **`MP3Processor` (`processMP3File` function):** Utility using the external `lame` tool to decode MP3s, process the audio with `VAD`, and optionally re-encode segments back to MP3.
 
-The main entry point that orchestrates the process. It:
+**Data Flow (`VAD.run`):** Audio Chunk -> Resampler (if needed) -> Frame Processor -> SileroVad (for inference) -> Frame Processor (segment detection logic) -> Output Speech Segments (async generator).
 
-- Loads the ONNX model
-- Creates a frame processor for speech detection
-- Provides a simple API for processing audio
+## Configuration Options (`VAD.create` options)
 
-### 2. Silero Model
-
-Handles the Voice Activity Detection using the Silero VAD ONNX model:
-
-- Loads and manages the model
-- Processes audio frames to determine speech probabilities
-- Maintains internal state for continuous processing
-
-### 3. Frame Processor
-
-The core speech detection logic:
-
-- Accepts audio frames from the resampler
-- Runs each frame through the Silero model to get speech probabilities
-- Implements the algorithm to detect speech segments using thresholds
-- Handles edge cases such as very short speech segments
-
-### 4. Resampler
-
-Converts audio from its native sample rate to the 16kHz required by the Silero model:
-
-- Implements a simple averaging-based downsampling algorithm
-- Provides both batch processing and streaming interfaces
-- Generates frames of the correct size for model processing
-
-### 5. MP3 Processor
-
-Provides functionality for working with MP3 files:
-
-- Decodes MP3 files using the lame library
-- Processes the decoded audio with VAD
-- Can save detected speech segments as MP3 files
-
-### Data Flow
-
-1. Audio data flows into the `VAD.run()` method
-2. The resampler converts the audio to 16kHz and splits it into frames
-3. Each frame is processed by the frame processor, which:
-   - Passes the frame to the Silero model
-   - Gets speech probabilities back from the model
-   - Tracks speech state (speaking/not speaking)
-   - Buffers audio during speech detection
-4. When speech is detected:
-   - A "speech start" event is triggered
-   - Frames are accumulated until speech ends
-   - When speech ends, a complete segment is returned
-5. The caller receives speech segments as they're detected via the async generator
-
-## Configuration Options
-
-### VAD Options
-
-| Option                    | Description                                                 | Default             |
-| ------------------------- | ----------------------------------------------------------- | ------------------- |
-| `modelPath`               | Path to the Silero VAD ONNX model file                      | `./silero_vad.onnx` |
-| `frameSamples`            | Number of audio samples in each frame                       | `1536`              |
-| `positiveSpeechThreshold` | Threshold above which a frame is considered speech          | `0.5`               |
-| `negativeSpeechThreshold` | Threshold below which a frame is considered not speech      | `0.35`              |
-| `redemptionFrames`        | Number of frames to wait before ending speech               | `8`                 |
-| `minSpeechFrames`         | Minimum number of speech frames to consider a valid segment | `3`                 |
-| `preSpeechPadFrames`      | Number of frames to include before speech start             | `1`                 |
-| `submitUserSpeechOnPause` | Whether to submit speech when paused                        | `false`             |
-
-### MP3 Processing Options
-
-| Option       | Description                                  | Default                   |
-| ------------ | -------------------------------------------- | ------------------------- |
-| `saveFiles`  | Whether to save speech segments as MP3 files | `false`                   |
-| `outputDir`  | Directory to save MP3 files                  | Current working directory |
-| `filePrefix` | Prefix for MP3 filenames                     | `"segment"`               |
+| Option                    | Description                                                             | Default             |
+| :------------------------ | :---------------------------------------------------------------------- | :------------------ |
+| `modelPath`               | Path to the `silero_vad.onnx` model file.                               | `./silero_vad.onnx` |
+| `frameSamples`            | Samples per frame for VAD processing (model-specific).                  | `1536`              |
+| `positiveSpeechThreshold` | Confidence threshold above which a frame is considered speech.          | `0.5`               |
+| `negativeSpeechThreshold` | Confidence threshold below which a frame is considered silence.         | `0.35`              |
+| `redemptionFrames`        | How many consecutive silent frames trigger the end of a speech segment. | `8`                 |
+| `minSpeechFrames`         | Minimum consecutive speech frames to form a valid segment.              | `3`                 |
+| `preSpeechPadFrames`      | How many frames _before_ speech onset to include in the segment.        | `1`                 |
 
 ## Performance Considerations
 
-- The Silero VAD model works best with 16kHz mono audio
-- Processing is done in chunks, so memory usage is efficient even for large files
-- For optimal model performance, use the recommended frame size of 1536 samples
-- MP3 processing requires the lame command-line tool to be installed on the system
+- The Silero VAD model operates on 16kHz mono audio. The library handles resampling from other sample rates.
+- Processing occurs in chunks, making it memory-efficient for large inputs.
+- The ONNX Runtime performs the core neural network inference.
+- MP3 processing involves external calls to `lame`, adding overhead for decoding/encoding.
 
 ## Development / Building Locally
 
-This package uses `tsup` for bundling and TypeScript for type checking and declaration generation. To use the latest code or make local changes:
+This package includes pre-built JavaScript files in the `dist` directory, which are kept up-to-date automatically via a pre-commit hook using Husky. Consumers installing from GitHub get these files directly.
+
+If you want to clone the repository and make changes to the source code (`src/`):
 
 1.  **Clone the repository:**
     ```bash
     git clone https://github.com/adjustleads/vad-node.git
     cd vad-node
     ```
-2.  **Install dependencies:**
+2.  **Install dependencies (including devDependencies):**
     ```bash
-    npm install # or bun install
+    npm install # or bun install / yarn install
     ```
-3.  **Run the build script:**
-    ```bash
-    npm run build # or bun run build
-    ```
+3.  **Make your changes** to the TypeScript source code in the `src/` directory.
+4.  **Commit your changes:** When you run `git commit`, the pre-commit hook configured in `.husky/pre-commit` will automatically:
+    - Run the build script (`npm run build` or `bun run build`) using `tsup` to update the `dist` directory with compiled JS and type definitions.
+    - Stage the updated `dist` directory (`git add dist`).
 
-This will generate the `dist` folder containing the CommonJS (`.js`), ES Module (`.mjs`), and TypeScript declaration (`.d.ts`) files, ready for local use or for consumers who clone the repository.
+This workflow ensures the committed `dist` files always reflect the latest source code changes in `src`.
