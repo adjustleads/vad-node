@@ -10,6 +10,11 @@ import { Message } from './messages'
 import { Resampler } from './resampler'
 
 /**
+ * Target sample rate for Silero VAD model in Hz
+ */
+export const TARGET_SAMPLE_RATE = 16000
+
+/**
  * Represents a segment of speech detected by the VAD
  */
 export interface SpeechSegment {
@@ -116,7 +121,7 @@ export class VAD {
     // Configure resampler to convert input audio to 16kHz (required by Silero VAD)
     const resamplerOptions = {
       nativeSampleRate: sampleRate,
-      targetSampleRate: 16000, // Target for Silero VAD
+      targetSampleRate: TARGET_SAMPLE_RATE, // Target for Silero VAD
       targetFrameSize: this.options.frameSamples,
     }
 
@@ -131,13 +136,13 @@ export class VAD {
 
       switch (msg) {
         case Message.SpeechStart:
-          // Calculate time in milliseconds based on frames processed so far at 16kHz
-          start = (frameIndex * this.options.frameSamples) / 16
+          // Calculate time in milliseconds based on frames processed so far at the target sample rate
+          start = (frameIndex * this.options.frameSamples) / (TARGET_SAMPLE_RATE / 1000)
           break
 
         case Message.SpeechEnd:
           // Calculate end time in milliseconds
-          end = ((frameIndex + 1) * this.options.frameSamples) / 16
+          end = ((frameIndex + 1) * this.options.frameSamples) / (TARGET_SAMPLE_RATE / 1000)
 
           // Yield the detected speech segment
           if (audio) {
@@ -154,7 +159,7 @@ export class VAD {
 
     if (msg === Message.SpeechEnd && audio && audio.length > 0) {
       // Calculate end time for the final segment
-      end = (frameIndex * this.options.frameSamples) / 16
+      end = (frameIndex * this.options.frameSamples) / (TARGET_SAMPLE_RATE / 1000)
 
       yield {
         audio,

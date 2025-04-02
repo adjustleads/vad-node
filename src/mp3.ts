@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises'
 import { spawn } from 'child_process'
 import * as path from 'path'
-import { VAD, type SpeechSegment, type VADOptions } from './vad'
+import { VAD, type SpeechSegment, type VADOptions, TARGET_SAMPLE_RATE } from './vad'
 
 /**
  * Options for MP3 processing
@@ -196,7 +196,7 @@ export async function processMP3File(mp3Path: string, options: ProcessMP3Options
 
       // Save WAV file if requested
       if (options.saveWavFiles) {
-        const wavPath = await saveWavFile(segment.audio, segments.length, sampleRate, {
+        const wavPath = await saveWavFile(segment.audio, segments.length, TARGET_SAMPLE_RATE, {
           outputDir: options.outputDir,
           filePrefix: options.filePrefix,
         })
