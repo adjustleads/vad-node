@@ -22,7 +22,8 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts --clean",
-    "prepare": "husky"
+    "prepare:husky": "husky",
+    "test": "npm run prepare:husky && echo \"Error: no test specified\" && exit 1"
   },
   "files": [
     "dist",
