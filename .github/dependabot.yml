@@ -1,0 +1,13 @@
+version: 2
+enable-beta-ecosystems: true # This is needed to make bun.lock updates work properly - https://github.com/dependabot/dependabot-core/issues/11602
+updates:
+  - package-ecosystem: 'bun'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 10
+    labels:
+      - 'dependencies'
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
