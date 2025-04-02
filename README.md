@@ -32,14 +32,14 @@ npm install onnxruntime-node
 ## Basic Usage
 
 ```javascript
-const { VAD } = require('@adjustleads/vad-node') // Use the package name as defined in package.json
+const { VAD } = require('adjustleads-vad-node') // Use the package name as defined in package.json
 const fs = require('fs') // Example for loading audio data
 
 async function detectSpeech() {
   try {
     // Create a VAD instance with default or custom options
     const vad = await VAD.create({
-      modelPath: 'node_modules/@adjustleads/vad-node/silero_vad.onnx', // Default path relative to execution
+      modelPath: 'node_modules/adjustleads-vad-node/silero_vad.onnx', // Default path relative to execution
       // Optional overrides:
       // positiveSpeechThreshold: 0.6,
       // negativeSpeechThreshold: 0.4,
@@ -96,7 +96,7 @@ _Note:_ Adjust the `modelPath` in `VAD.create` if `silero_vad.onnx` is not locat
 The library includes a utility function to process MP3 files directly, provided `lame` is installed on your system.
 
 ```javascript
-const { processMP3File, checkLameInstallation } = require('@adjustleads/vad-node');
+const { processMP3File, checkLameInstallation } = require('adjustleads-vad-node');
 const path = require('path');
 
 async function processSpeechInMP3() {
