@@ -4,9 +4,17 @@ A Node.js library for Voice Activity Detection using the Silero VAD model.
 
 ## Installation
 
+**Note:** This installs directly from the `main` branch on GitHub. This means you get the latest code, but it might not be a stable release.
+
 ```bash
-npm install @adjustleads/vad-node
+# Installs from the main branch and automatically builds the package
+npm install adjustleads/vad-node
+
+# Or specify a specific commit or tag if needed
+# npm install adjustleads/vad-node#<commit-hash-or-tag>
 ```
+
+Alternatively, clone the repository and build it yourself (see Development).
 
 ## Dependencies
 
@@ -183,64 +191,22 @@ Provides functionality for working with MP3 files:
 - For optimal model performance, use the recommended frame size of 1536 samples
 - MP3 processing requires the lame command-line tool to be installed on the system
 
-## Development
+## Development / Building Locally
 
-### Building the Package
+This package uses `tsup` for bundling and TypeScript for type checking and declaration generation. To use the latest code or make local changes:
 
-This package uses `tsup` for bundling and TypeScript for type checking and declaration generation. To build the package locally:
-
-1.  Install dependencies:
+1.  **Clone the repository:**
     ```bash
-    bun install
+    git clone https://github.com/adjustleads/vad-node.git
+    cd vad-node
     ```
-2.  Run the build script:
+2.  **Install dependencies:**
     ```bash
-    bun run build
+    npm install # or bun install
+    ```
+3.  **Run the build script:**
+    ```bash
+    npm run build # or bun run build
     ```
 
-This will generate the `dist` folder containing the CommonJS (`.js`), ES Module (`.mjs`), and TypeScript declaration (`.d.ts`) files.
-
-### Releasing and Publishing (Automated with Release Please)
-
-This project uses [Release Please](https://github.com/googleapis/release-please) via the [`google-github-actions/release-please-action`](https://github.com/google-github-actions/release-please-action) to automate releases and changelog generation based on [Conventional Commits](https://www.conventionalcommits.org/). Publishing to GitHub Packages is then triggered automatically.
-
-**Release Workflow:**
-
-1.  **Make Changes & Commit:** Make your code changes. Commit your work using the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) format. Examples:
-    - `feat: Add support for WAV file input` (triggers a minor release, e.g., 0.1.0 -> 0.2.0)
-    - `fix: Correct calculation error in frame processing` (triggers a patch release, e.g., 0.1.0 -> 0.1.1)
-    - `perf: Optimize audio resampling algorithm` (triggers a patch release)
-    - `docs: Update README with new configuration options` (no release triggered by default)
-    - `feat!: Add new required parameter to create() method` (the `!` indicates a BREAKING CHANGE, triggers a major release, e.g., 1.2.3 -> 2.0.0)
-    - Commits without a conventional commit type (e.g., `chore: Refactor internal code`) will not trigger a release or appear in the changelog.
-2.  **Push to `main`:** Push your commits to the `main` branch.
-3.  **Release Please Action:** The `release-please.yml` workflow runs automatically on pushes to `main`.
-    - It analyzes the commits since the last release.
-    - If release-worthy commits (`feat`, `fix`, `perf`, breaking changes) are found, it creates or updates a **Release Pull Request**.
-    - This PR contains the proposed version bump in `package.json`, the updated `CHANGELOG.md`, and potentially the `.release-please-manifest.json` file.
-4.  **Review & Merge Release PR:** Review the automatically generated Release PR. It shows the exact version bump and the changes included.
-    - **Do not add other code changes to this PR.** If more changes are needed, merge them into `main` separately, and Release Please will update the existing Release PR.
-    - Once satisfied, **merge the Release PR**.
-5.  **Release Creation & Publish Trigger:** Merging the Release PR signals the `release-please` action to:
-    - Create a Git tag (e.g., `v0.2.0`).
-    - Create a corresponding GitHub Release with the generated changelog notes.
-6.  **Automated Publish:** The creation of the GitHub Release (in step 5) triggers the `publish.yml` workflow, which automatically:
-    - Builds the package (`bun run build`).
-    - Publishes the package (`dist` folder and `silero_vad.onnx`) to GitHub Packages under the `@adjustleads` scope using `bun publish`.
-
-**Important Notes:**
-
-- **Conventional Commits are required** for changes to be included in releases and changelogs.
-- A **`RELEASE_PLEASE_TOKEN`** (a Personal Access Token with `repo` scope) must be configured in the repository's secrets for the `release-please` action to create releases.
-- The `.release-please-manifest.json` file is used internally by Release Please to track the current version and should be committed to the repository.
-
-**First Time Publish:**
-
-After the _first_ successful run of the release workflow, the package will be published **privately** by default. You will need to manually change its visibility:
-
-1.  Navigate to the package page on GitHub (linked from the repository's "Packages" tab).
-2.  Click "Package settings".
-3.  Under "Danger Zone", click "Change visibility".
-4.  Select "Public" and confirm.
-
-Subsequent releases published via the workflow will update the existing public package.
+This will generate the `dist` folder containing the CommonJS (`.js`), ES Module (`.mjs`), and TypeScript declaration (`.d.ts`) files, ready for local use or for consumers who clone the repository.
