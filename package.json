@@ -1,14 +1,39 @@
 {
   "name": "@adjustleads/vad-node",
-  "module": "src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
   "type": "module",
-  "private": true,
+  "version": "0.0.1",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adjustleads/vad-node.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
   "engines": {
     "node": ">=23"
   },
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean"
+  },
+  "files": [
+    "dist",
+    "silero_vad.onnx"
+  ],
   "devDependencies": {
     "@types/bun": "latest",
-    "prettier": "^3.5.3"
+    "prettier": "^3.5.3",
+    "tsup": "^8.4.0"
   },
   "peerDependencies": {
     "typescript": "^5.8.2"

@@ -1,0 +1,35 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main # Or your default branch
+
+permissions:
+  contents: write # Needed to write package.json, CHANGELOG.md
+  pull-requests: write # Needed to create/update the Release PR
+  # Note: Using a PAT is recommended for release creation and downstream triggers.
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Release Please
+        uses: googleapis/release-please-action@v4
+        id: release # Give the step an ID to reference its outputs
+        with:
+          # Use the configuration file we created
+          config-file: release-please-config.json
+          # Use a manifest file (points to config file, preferred way)
+          manifest-file: .release-please-manifest.json
+          # Use a Personal Access Token (PAT) stored as a secret
+          # This PAT needs permissions to write content, create/update PRs, create releases/tags.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+
+      # The release-please action creates a PR, but doesn't create the release itself
+      # if a release was created (i.e., the Release PR was merged), the `release_created` output is true.
+      # This step is an example of how you *could* potentially use the output if needed elsewhere,
+      # but our publish workflow handles the actual publish based on the release event.
+      - name: Output release status
+        if: steps.release.outputs.release_created
+        run: echo "Release ${{ steps.release.outputs.tag_name }} created"
