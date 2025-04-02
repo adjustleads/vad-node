@@ -1,14 +1,42 @@
 import * as fs from 'fs/promises'
 import { spawn } from 'child_process'
 import * as path from 'path'
-import { NonRealTimeVAD } from '../src'
+import { VAD, type SpeechSegment, type VADOptions } from './vad'
+
+/**
+ * Options for MP3 processing
+ */
+export interface ProcessMP3Options extends Partial<VADOptions> {
+  /** Whether to save audio segments as WAV files */
+  saveWavFiles?: boolean
+  /** Directory to save WAV files (defaults to current working directory) */
+  outputDir?: string
+  /** Prefix for WAV filenames */
+  filePrefix?: string
+}
+
+/**
+ * Result of processing an MP3 file
+ */
+export interface ProcessMP3Result {
+  /** Detected speech segments */
+  segments: SpeechSegment[]
+  /** Paths to saved WAV files (if saveWavFiles is true) */
+  wavFiles?: string[]
+  /** Total processing time in milliseconds */
+  processingTime: number
+  /** Original audio data */
+  audioData: Float32Array
+  /** Original sample rate */
+  sampleRate: number
+}
 
 /**
  * Decode an MP3 file to PCM audio using lame
  * @param mp3Path Path to the MP3 file
  * @returns Promise containing [audioData, sampleRate]
  */
-async function decodeMP3(mp3Path: string): Promise<[Float32Array, number]> {
+export async function decodeMP3(mp3Path: string): Promise<[Float32Array, number]> {
   console.log(`Decoding MP3 file: ${mp3Path}`)
 
   // First check if the file exists
@@ -20,7 +48,6 @@ async function decodeMP3(mp3Path: string): Promise<[Float32Array, number]> {
 
   return new Promise((resolve, reject) => {
     // Use lame to decode MP3 to 16-bit signed little-endian PCM
-    console.log(`Spawning lame with file: ${mp3Path}`)
     const lame = spawn('lame', [
       '--decode', // Decode mode
       '-t', // Don't output progress (silent)
@@ -43,7 +70,6 @@ async function decodeMP3(mp3Path: string): Promise<[Float32Array, number]> {
     lame.stderr.on('data', (data) => {
       const output = data.toString()
       stderrOutput += output
-      console.log(`lame stderr: ${output}`)
 
       // Try to extract sample rate from lame output
       const match = output.match(/(\d+) Hz/)
@@ -83,50 +109,19 @@ async function decodeMP3(mp3Path: string): Promise<[Float32Array, number]> {
 }
 
 /**
- * Process an MP3 file with the VAD
- * @param mp3Path Path to the MP3 file
+ * Save audio segment to a WAV file
+ * @param audio Audio data as Float32Array
+ * @param index Segment index
+ * @param sampleRate Sample rate in Hz
+ * @param options Output options
+ * @returns Path to the saved WAV file
  */
-async function processMP3WithVAD(mp3Path: string): Promise<void> {
-  try {
-    // Initialize the VAD
-    console.log('Initializing VAD...')
-    const vad = await NonRealTimeVAD.new({
-      // Optional VAD parameters can be set here
-      positiveSpeechThreshold: 0.5,
-      negativeSpeechThreshold: 0.3,
-    })
-    console.log('VAD initialized')
-
-    // Decode the MP3 file
-    const [audioData, sampleRate] = await decodeMP3(mp3Path)
-
-    // Process the audio with the VAD
-    console.log('Processing audio with VAD...')
-    const startTime = Date.now()
-    let segmentCount = 0
-
-    for await (const { audio, start, end } of vad.run(audioData, sampleRate)) {
-      segmentCount++
-      const durationMs = end - start
-      console.log(
-        `Speech segment ${segmentCount}: Start=${start.toFixed(0)}ms, End=${end.toFixed(0)}ms, Duration=${durationMs.toFixed(0)}ms, Samples=${audio.length}`,
-      )
-
-      // Optionally save the audio segment to a file
-      // await saveAudioSegment(audio, segmentCount, sampleRate)
-    }
-
-    const processingTime = Date.now() - startTime
-    console.log(`VAD processing complete. Found ${segmentCount} speech segments in ${processingTime}ms`)
-  } catch (error) {
-    console.error('Error processing MP3:', error)
-  }
-}
-
-/**
- * Optional: Save an audio segment to a WAV file
- */
-async function saveAudioSegment(audio: Float32Array, index: number, sampleRate: number): Promise<void> {
+export async function saveWavFile(
+  audio: Float32Array,
+  index: number,
+  sampleRate: number,
+  options: { outputDir?: string; filePrefix?: string } = {},
+): Promise<string> {
   // Convert Float32Array to 16-bit PCM
   const buffer = Buffer.alloc(audio.length * 2)
   for (let i = 0; i < audio.length; i++) {
@@ -160,33 +155,93 @@ async function saveAudioSegment(audio: Float32Array, index: number, sampleRate: 
   // Combine header and data
   const wavData = Buffer.concat([header, buffer])
 
+  // Determine output directory
+  const outputDir = options.outputDir || process.cwd()
+  const prefix = options.filePrefix || 'segment'
+
+  // Ensure the output directory exists
+  await fs.mkdir(outputDir, { recursive: true })
+
   // Save to file
-  const outputPath = path.join(process.cwd(), `segment_${index}.wav`)
+  const filename = `${prefix}_${index}.wav`
+  const outputPath = path.join(outputDir, filename)
   await fs.writeFile(outputPath, wavData)
-  console.log(`Saved audio segment to ${outputPath}`)
+
+  return outputPath
 }
 
-// Run the test if this file is executed directly
-// Use import.meta approach for ES modules
-const isMainModule = import.meta.url === `file://${process.argv[1]}`
-if (isMainModule) {
-  // Make sure to provide a path to an MP3 file
-  const mp3Path = process.argv[2]
-  if (!mp3Path) {
-    console.error('Please provide a path to an MP3 file')
-    console.error('Usage: node test/mp3.js path/to/audio.mp3')
-    process.exit(1)
-  }
+/**
+ * Process an MP3 file with the VAD
+ *
+ * @param mp3Path Path to the MP3 file
+ * @param options Processing options
+ * @returns Promise with processing results
+ */
+export async function processMP3File(mp3Path: string, options: ProcessMP3Options = {}): Promise<ProcessMP3Result> {
+  try {
+    // Initialize the VAD with provided options
+    const vad = await VAD.create(options)
 
-  // Check if lame is installed
-  spawn('lame', ['--version']).on('error', () => {
-    console.error('Error: lame is not installed or not in PATH')
-    console.error('Please install lame (e.g., brew install lame on macOS)')
-    process.exit(1)
-  })
+    // Decode the MP3 file
+    const [audioData, sampleRate] = await decodeMP3(mp3Path)
 
-  processMP3WithVAD(mp3Path).catch((error) => {
+    // Process the audio with the VAD
+    const startTime = Date.now()
+    const segments: SpeechSegment[] = []
+    const wavFiles: string[] = []
+
+    // Collect all segments
+    for await (const segment of vad.run(audioData, sampleRate)) {
+      segments.push(segment)
+
+      // Save WAV file if requested
+      if (options.saveWavFiles) {
+        const wavPath = await saveWavFile(segment.audio, segments.length, sampleRate, {
+          outputDir: options.outputDir,
+          filePrefix: options.filePrefix,
+        })
+        wavFiles.push(wavPath)
+      }
+    }
+
+    const processingTime = Date.now() - startTime
+
+    // Return the results
+    return {
+      segments,
+      wavFiles: options.saveWavFiles ? wavFiles : undefined,
+      processingTime,
+      audioData,
+      sampleRate,
+    }
+  } catch (error) {
     console.error('Error processing MP3:', error)
-    process.exit(1)
+    throw error
+  }
+}
+
+/**
+ * Checks if lame is installed and available
+ * @returns Promise that resolves if lame is available, rejects otherwise
+ */
+export function checkLameInstallation(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const process = spawn('lame', ['--version'])
+
+    process.on('error', () => {
+      reject(
+        new Error(
+          'Error: lame is not installed or not in PATH. Please install lame (e.g., brew install lame on macOS)',
+        ),
+      )
+    })
+
+    process.on('close', (code) => {
+      if (code === 0) {
+        resolve()
+      } else {
+        reject(new Error(`lame command exited with code ${code}`))
+      }
+    })
   })
 }

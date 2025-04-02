@@ -1,4 +1,14 @@
-// TODO: export stuff here
+/**
+ * Voice Activity Detection (VAD) for Node.js
+ *
+ * This package provides Voice Activity Detection implementation
+ * based on the Silero VAD model for identifying speech segments in audio files.
+ */
 
-export { NonRealTimeVAD, type NonRealTimeVADOptions, type NonRealTimeVADSpeechData } from './vad'
+// Core VAD functionality
+export { VAD, type VADOptions, type SpeechSegment } from './vad'
 export { Message } from './messages'
+export { type FrameProcessorOptions } from './frame-processor'
+
+// MP3 processing functionality
+export { processMP3File, decodeMP3, saveWavFile, checkLameInstallation, type ProcessMP3Options } from './mp3'
