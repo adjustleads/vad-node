@@ -67,9 +67,9 @@ async function processSpeechInMP3() {
       negativeSpeechThreshold: 0.4,
 
       // MP3 processing options
-      saveWavFiles: true, // Save segments as WAV files
-      outputDir: './segments', // Directory to save WAV files
-      filePrefix: 'speech', // Prefix for WAV filenames
+      saveFiles: true, // Save segments as MP3 files
+      outputDir: './segments', // Directory to save MP3 files
+      filePrefix: 'speech', // Prefix for MP3 filenames
     })
 
     // Display results
@@ -80,9 +80,9 @@ async function processSpeechInMP3() {
     result.segments.forEach((segment, i) => {
       console.log(`Segment ${i + 1}: ${segment.start.toFixed(0)}ms - ${segment.end.toFixed(0)}ms`)
 
-      // If saveWavFiles was true, you can access the saved file paths
-      if (result.wavFiles) {
-        console.log(`  Saved as: ${result.wavFiles[i]}`)
+      // If saveFiles was true, you can access the saved file paths
+      if (result.outputFiles) {
+        console.log(`  Saved as: ${result.outputFiles[i]}`)
       }
     })
   } catch (error) {
@@ -136,7 +136,7 @@ Provides functionality for working with MP3 files:
 
 - Decodes MP3 files using the lame library
 - Processes the decoded audio with VAD
-- Can save detected speech segments as WAV files
+- Can save detected speech segments as MP3 files
 
 ### Data Flow
 
@@ -170,11 +170,11 @@ Provides functionality for working with MP3 files:
 
 ### MP3 Processing Options
 
-| Option         | Description                                  | Default                   |
-| -------------- | -------------------------------------------- | ------------------------- |
-| `saveWavFiles` | Whether to save speech segments as WAV files | `false`                   |
-| `outputDir`    | Directory to save WAV files                  | Current working directory |
-| `filePrefix`   | Prefix for WAV filenames                     | `"segment"`               |
+| Option       | Description                                  | Default                   |
+| ------------ | -------------------------------------------- | ------------------------- |
+| `saveFiles`  | Whether to save speech segments as MP3 files | `false`                   |
+| `outputDir`  | Directory to save MP3 files                  | Current working directory |
+| `filePrefix` | Prefix for MP3 filenames                     | `"segment"`               |
 
 ## Performance Considerations
 

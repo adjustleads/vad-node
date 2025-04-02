@@ -7,13 +7,11 @@ import { VAD, type SpeechSegment, type VADOptions, TARGET_SAMPLE_RATE } from './
  * Options for MP3 processing
  */
 export interface ProcessMP3Options extends Partial<VADOptions> {
-  /** Whether to save audio segments as files */
+  /** Whether to save audio segments as MP3 files */
   saveFiles?: boolean
-  /** Format for saving audio files (default: 'wav') */
-  saveFormat?: 'wav' | 'mp3'
-  /** Directory to save audio files (defaults to current working directory) */
+  /** Directory to save MP3 files (defaults to current working directory) */
   outputDir?: string
-  /** Prefix for output filenames */
+  /** Prefix for MP3 filenames */
   filePrefix?: string
 }
 
@@ -23,7 +21,7 @@ export interface ProcessMP3Options extends Partial<VADOptions> {
 export interface ProcessMP3Result {
   /** Detected speech segments */
   segments: SpeechSegment[]
-  /** Paths to saved audio files (if saveFiles is true) */
+  /** Paths to saved MP3 files (if saveFiles is true) */
   outputFiles?: string[]
   /** Total processing time in milliseconds */
   processingTime: number
@@ -108,68 +106,6 @@ export async function decodeMP3(mp3Path: string): Promise<[Float32Array, number]
       reject(new Error(`Failed to spawn lame: ${err.message}`))
     })
   })
-}
-
-/**
- * Save audio segment to a WAV file
- * @param audio Audio data as Float32Array
- * @param index Segment index
- * @param sampleRate Sample rate in Hz
- * @param options Output options
- * @returns Path to the saved WAV file
- */
-export async function saveWavFile(
-  audio: Float32Array,
-  index: number,
-  sampleRate: number,
-  options: { outputDir?: string; filePrefix?: string } = {},
-): Promise<string> {
-  // Convert Float32Array to 16-bit PCM
-  const buffer = Buffer.alloc(audio.length * 2)
-  for (let i = 0; i < audio.length; i++) {
-    // Clamp to [-1.0, 1.0] and convert to 16-bit
-    const sample = Math.max(-1.0, Math.min(1.0, audio[i]!))
-    buffer.writeInt16LE(Math.floor(sample * 32767), i * 2)
-  }
-
-  // Create a simple WAV header
-  const header = Buffer.alloc(44)
-
-  // RIFF chunk descriptor
-  header.write('RIFF', 0)
-  header.writeUInt32LE(36 + buffer.length, 4) // Chunk size
-  header.write('WAVE', 8)
-
-  // "fmt " sub-chunk
-  header.write('fmt ', 12)
-  header.writeUInt32LE(16, 16) // Subchunk1 size (16 for PCM)
-  header.writeUInt16LE(1, 20) // Audio format (1 for PCM)
-  header.writeUInt16LE(1, 22) // Num channels (1 for mono)
-  header.writeUInt32LE(sampleRate, 24) // Sample rate
-  header.writeUInt32LE(sampleRate * 2, 28) // Byte rate (SampleRate * NumChannels * BitsPerSample/8)
-  header.writeUInt16LE(2, 32) // Block align (NumChannels * BitsPerSample/8)
-  header.writeUInt16LE(16, 34) // Bits per sample
-
-  // "data" sub-chunk
-  header.write('data', 36)
-  header.writeUInt32LE(buffer.length, 40) // Subchunk2 size
-
-  // Combine header and data
-  const wavData = Buffer.concat([header, buffer])
-
-  // Determine output directory
-  const outputDir = options.outputDir || process.cwd()
-  const prefix = options.filePrefix || 'segment'
-
-  // Ensure the output directory exists
-  await fs.mkdir(outputDir, { recursive: true })
-
-  // Save to file
-  const filename = `${prefix}_${index}.wav`
-  const outputPath = path.join(outputDir, filename)
-  await fs.writeFile(outputPath, wavData)
-
-  return outputPath
 }
 
 /**
@@ -272,30 +208,16 @@ export async function processMP3File(mp3Path: string, options: ProcessMP3Options
     const segments: SpeechSegment[] = []
     const outputFiles: string[] = []
 
-    // Default to WAV format if not specified
-    const saveFormat = options.saveFormat || 'wav'
-
     // Collect all segments
     for await (const segment of vad.run(audioData, sampleRate)) {
       segments.push(segment)
 
-      // Save audio file if requested
+      // Save MP3 file if requested
       if (options.saveFiles) {
-        let outputPath: string
-
-        // Save file based on selected format
-        if (saveFormat === 'mp3') {
-          outputPath = await saveMP3File(segment.audio, segments.length, TARGET_SAMPLE_RATE, {
-            outputDir: options.outputDir,
-            filePrefix: options.filePrefix,
-          })
-        } else {
-          outputPath = await saveWavFile(segment.audio, segments.length, TARGET_SAMPLE_RATE, {
-            outputDir: options.outputDir,
-            filePrefix: options.filePrefix,
-          })
-        }
-
+        const outputPath = await saveMP3File(segment.audio, segments.length, TARGET_SAMPLE_RATE, {
+          outputDir: options.outputDir,
+          filePrefix: options.filePrefix,
+        })
         outputFiles.push(outputPath)
       }
     }

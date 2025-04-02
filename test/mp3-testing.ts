@@ -1,7 +1,5 @@
-import * as fs from 'fs/promises'
-import { spawn } from 'child_process'
 import * as path from 'path'
-import { VAD, processMP3File, checkLameInstallation } from '../src'
+import { processMP3File, checkLameInstallation } from '../src'
 
 /**
  * Process an MP3 file with the simplified helper function
@@ -18,10 +16,8 @@ async function processWithHelper(mp3Path: string): Promise<void> {
       // VAD options
       positiveSpeechThreshold: 0.5,
       negativeSpeechThreshold: 0.3,
-
       // MP3 processing options
       saveFiles: true,
-      saveFormat: 'mp3',
       outputDir: path.join(process.cwd(), 'output'),
       filePrefix: 'speech',
     })

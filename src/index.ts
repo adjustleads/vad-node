@@ -11,4 +11,4 @@ export { Message } from './messages'
 export { type FrameProcessorOptions } from './frame-processor'
 
 // MP3 processing functionality
-export { processMP3File, decodeMP3, saveWavFile, checkLameInstallation, type ProcessMP3Options } from './mp3'
+export { processMP3File, checkLameInstallation, type ProcessMP3Options } from './mp3'
