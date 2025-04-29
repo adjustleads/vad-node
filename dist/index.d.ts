@@ -118,6 +118,8 @@ interface ProcessMP3Options extends Partial<VADOptions> {
     filePrefix?: string;
     /** Optional pre-initialized VAD instance */
     vadInstance?: VAD;
+    /** Merge all output segments into a single file with padding (requires saveFiles=true) */
+    mergeOutputChunks?: boolean;
 }
 /**
  * Result of processing an MP3 file

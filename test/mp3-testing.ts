@@ -18,6 +18,7 @@ async function processWithHelper(mp3Path: string): Promise<void> {
       negativeSpeechThreshold: 0.3,
       // MP3 processing options
       saveFiles: true,
+      mergeOutputChunks: true,
       outputDir: path.join(process.cwd(), 'output'),
       filePrefix: 'speech',
     })

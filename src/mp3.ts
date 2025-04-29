@@ -16,6 +16,8 @@ export interface ProcessMP3Options extends Partial<VADOptions> {
   filePrefix?: string
   /** Optional pre-initialized VAD instance */
   vadInstance?: VAD
+  /** Merge all output segments into a single file with padding (requires saveFiles=true) */
+  mergeOutputChunks?: boolean
 }
 
 /**
@@ -115,29 +117,32 @@ export async function decodeMP3(mp3Path: string): Promise<[Float32Array, number]
 /**
  * Save audio segment to an MP3 file using lame
  * @param audio Audio data as Float32Array
- * @param index Segment index
  * @param sampleRate Sample rate in Hz
  * @param options Output options
  * @returns Path to the saved MP3 file
  */
 export async function saveMP3File(
   audio: Float32Array,
-  index: number,
   sampleRate: number,
-  options: { outputDir?: string; filePrefix?: string } = {},
+  options: {
+    outputDir?: string
+    filePrefix?: string
+    index?: number
+    outputFilename?: string
+  } = {},
 ): Promise<string> {
-  // Create temporary PCM file
-  const tempPcmPath = path.join(
-    options.outputDir || process.cwd(),
-    `temp_${options.filePrefix || 'segment'}_${index}.pcm`,
-  )
-
-  // Determine output directory
+  // Determine output directory and ensure it exists
   const outputDir = options.outputDir || process.cwd()
-  const prefix = options.filePrefix || 'segment'
-
-  // Ensure the output directory exists
   await fs.mkdir(outputDir, { recursive: true })
+
+  // Determine output filename
+  const filename = options.outputFilename
+    ? options.outputFilename
+    : `${options.filePrefix || 'segment'}_${options.index ?? 0}.mp3`
+  const outputPath = path.join(outputDir, filename)
+
+  // Create temporary PCM file path based on the final filename to avoid collisions
+  const tempPcmPath = path.join(outputDir, `temp_${path.parse(filename).name}.pcm`)
 
   // Convert Float32Array to 16-bit PCM buffer
   const buffer = Buffer.alloc(audio.length * 2)
@@ -149,9 +154,6 @@ export async function saveMP3File(
 
   // Write PCM to temporary file
   await fs.writeFile(tempPcmPath, buffer)
-
-  // Prepare MP3 output path
-  const outputPath = path.join(outputDir, `${prefix}_${index}.mp3`)
 
   // Use lame to convert PCM to MP3
   return new Promise((resolve, reject) => {
@@ -168,7 +170,7 @@ export async function saveMP3File(
       '-q',
       '4', // Quality setting
       tempPcmPath, // Input file
-      outputPath, // Output file
+      outputPath, // Output file (using the determined filename)
     ])
 
     lame.on('close', async (code) => {
@@ -211,20 +213,69 @@ export async function processMP3File(mp3Path: string, options: ProcessMP3Options
     const startTime = Date.now()
     const segments: SpeechSegment[] = []
     const outputFiles: string[] = []
+    const allAudioSegments: Float32Array[] = [] // For merging
 
     // Collect all segments
     for await (const segment of vad.run(audioData, detectedSampleRate)) {
       segments.push(segment)
 
-      // Save MP3 file if requested
+      // Handle saving files based on options
       if (options.saveFiles) {
-        // Use the target sample rate for saving segments as VAD output is resampled
-        const outputPath = await saveMP3File(segment.audio, segments.length, TARGET_SAMPLE_RATE, {
-          outputDir: options.outputDir,
-          filePrefix: options.filePrefix,
-        })
-        outputFiles.push(outputPath)
+        if (options.mergeOutputChunks) {
+          allAudioSegments.push(segment.audio) // Collect audio for merging
+        } else {
+          // Save individually
+          const outputPath = await saveMP3File(
+            segment.audio,
+            TARGET_SAMPLE_RATE, // VAD output is resampled
+            {
+              outputDir: options.outputDir,
+              filePrefix: options.filePrefix,
+              index: segments.length, // Pass index for default naming
+            },
+          )
+          outputFiles.push(outputPath)
+        }
       }
+    }
+
+    // Save merged file if requested and segments exist
+    if (options.saveFiles && options.mergeOutputChunks && allAudioSegments.length > 0) {
+      // Calculate padding samples (500ms at VAD target rate)
+      const paddingDurationSeconds = 0.5
+      const paddingSamples = Math.floor(paddingDurationSeconds * TARGET_SAMPLE_RATE)
+      const silencePadding = new Float32Array(paddingSamples).fill(0)
+
+      // Calculate total length including padding
+      let totalLength = 0
+      allAudioSegments.forEach((segment) => {
+        totalLength += segment.length
+      })
+      totalLength += Math.max(0, allAudioSegments.length - 1) * paddingSamples
+
+      // Concatenate segments with padding
+      const mergedAudio = new Float32Array(totalLength)
+      let currentOffset = 0
+      allAudioSegments.forEach((segment, index) => {
+        mergedAudio.set(segment, currentOffset)
+        currentOffset += segment.length
+        if (index < allAudioSegments.length - 1) {
+          mergedAudio.set(silencePadding, currentOffset)
+          currentOffset += paddingSamples
+        }
+      })
+
+      // Save the merged file
+      const mergedFilename = `${options.filePrefix || 'merged_output'}.mp3`
+      const mergedOutputPath = await saveMP3File(
+        mergedAudio,
+        TARGET_SAMPLE_RATE, // VAD output rate
+        {
+          outputDir: options.outputDir,
+          outputFilename: mergedFilename, // Use specific filename
+        },
+      )
+      outputFiles.push(mergedOutputPath) // Add the single merged file path
     }
 
     const processingTime = Date.now() - startTime
@@ -232,7 +283,7 @@ export async function processMP3File(mp3Path: string, options: ProcessMP3Options
     // Return the results
     return {
       segments,
-      outputFiles: options.saveFiles ? outputFiles : undefined,
+      outputFiles: options.saveFiles ? outputFiles : undefined, // Contains single or multiple paths
       processingTime,
       audioData,
       sampleRate: detectedSampleRate,

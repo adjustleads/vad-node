@@ -530,21 +530,18 @@ async function decodeMP3(mp3Path) {
     });
   });
 }
-async function saveMP3File(audio, index, sampleRate, options = {}) {
-  const tempPcmPath = path.join(
-    options.outputDir || process.cwd(),
-    `temp_${options.filePrefix || "segment"}_${index}.pcm`
-  );
+async function saveMP3File(audio, sampleRate, options = {}) {
   const outputDir = options.outputDir || process.cwd();
-  const prefix = options.filePrefix || "segment";
   await fs2.mkdir(outputDir, { recursive: true });
+  const filename = options.outputFilename ? options.outputFilename : `${options.filePrefix || "segment"}_${options.index ?? 0}.mp3`;
+  const outputPath = path.join(outputDir, filename);
+  const tempPcmPath = path.join(outputDir, `temp_${path.parse(filename).name}.pcm`);
   const buffer = Buffer.alloc(audio.length * 2);
   for (let i = 0; i < audio.length; i++) {
     const sample = Math.max(-1, Math.min(1, audio[i]));
     buffer.writeInt16LE(Math.floor(sample * 32767), i * 2);
   }
   await fs2.writeFile(tempPcmPath, buffer);
-  const outputPath = path.join(outputDir, `${prefix}_${index}.mp3`);
   return new Promise((resolve, reject) => {
     const lame = spawn("lame", [
       "-r",
@@ -568,7 +565,7 @@ async function saveMP3File(audio, index, sampleRate, options = {}) {
       tempPcmPath,
       // Input file
       outputPath
-      // Output file
+      // Output file (using the determined filename)
     ]);
     lame.on("close", async (code) => {
       try {
@@ -594,20 +591,65 @@ async function processMP3File(mp3Path, options = {}) {
     const startTime = Date.now();
     const segments = [];
     const outputFiles = [];
+    const allAudioSegments = [];
     for await (const segment of vad.run(audioData, detectedSampleRate)) {
       segments.push(segment);
       if (options.saveFiles) {
-        const outputPath = await saveMP3File(segment.audio, segments.length, TARGET_SAMPLE_RATE, {
-          outputDir: options.outputDir,
-          filePrefix: options.filePrefix
-        });
-        outputFiles.push(outputPath);
+        if (options.mergeOutputChunks) {
+          allAudioSegments.push(segment.audio);
+        } else {
+          const outputPath = await saveMP3File(
+            segment.audio,
+            TARGET_SAMPLE_RATE,
+            // VAD output is resampled
+            {
+              outputDir: options.outputDir,
+              filePrefix: options.filePrefix,
+              index: segments.length
+              // Pass index for default naming
+            }
+          );
+          outputFiles.push(outputPath);
+        }
       }
+    }
+    if (options.saveFiles && options.mergeOutputChunks && allAudioSegments.length > 0) {
+      const paddingDurationSeconds = 0.5;
+      const paddingSamples = Math.floor(paddingDurationSeconds * TARGET_SAMPLE_RATE);
+      const silencePadding = new Float32Array(paddingSamples).fill(0);
+      let totalLength = 0;
+      allAudioSegments.forEach((segment) => {
+        totalLength += segment.length;
+      });
+      totalLength += Math.max(0, allAudioSegments.length - 1) * paddingSamples;
+      const mergedAudio = new Float32Array(totalLength);
+      let currentOffset = 0;
+      allAudioSegments.forEach((segment, index) => {
+        mergedAudio.set(segment, currentOffset);
+        currentOffset += segment.length;
+        if (index < allAudioSegments.length - 1) {
+          mergedAudio.set(silencePadding, currentOffset);
+          currentOffset += paddingSamples;
+        }
+      });
+      const mergedFilename = `${options.filePrefix || "merged_output"}.mp3`;
+      const mergedOutputPath = await saveMP3File(
+        mergedAudio,
+        TARGET_SAMPLE_RATE,
+        // VAD output rate
+        {
+          outputDir: options.outputDir,
+          outputFilename: mergedFilename
+          // Use specific filename
+        }
+      );
+      outputFiles.push(mergedOutputPath);
     }
     const processingTime = Date.now() - startTime;
     return {
       segments,
       outputFiles: options.saveFiles ? outputFiles : void 0,
+      // Contains single or multiple paths
       processingTime,
       audioData,
       sampleRate: detectedSampleRate
