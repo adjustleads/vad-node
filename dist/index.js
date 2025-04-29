@@ -445,8 +445,33 @@ var VAD = class _VAD {
 import * as fs2 from "fs/promises";
 import { spawn } from "child_process";
 import * as path from "path";
+
+// src/logger.ts
+var isProduction = process.env.NODE_ENV === "production";
+var logger = {
+  /**
+   * Logs messages to the console if not in production.
+   * @param {...any} args Arguments to log.
+   */
+  log: (...args) => {
+    if (!isProduction) {
+      console.log(...args);
+    }
+  },
+  /**
+   * Logs error messages to the console if not in production.
+   * @param {...any} args Arguments to log as errors.
+   */
+  error: (...args) => {
+    if (!isProduction) {
+      console.error(...args);
+    }
+  }
+};
+
+// src/mp3.ts
 async function decodeMP3(mp3Path) {
-  console.log(`Decoding MP3 file: ${mp3Path}`);
+  logger.log(`Decoding MP3 file: ${mp3Path}`);
   try {
     await fs2.access(mp3Path);
   } catch (err) {
@@ -479,9 +504,10 @@ async function decodeMP3(mp3Path) {
     lame.stderr.on("data", (data) => {
       const output = data.toString();
       stderrOutput += output;
-      const match = output.match(/(\d+) Hz/);
+      const match = output.match(/\((\d+(?:\.\d+)?)\s+kHz/);
       if (match && match[1]) {
-        sampleRate = parseInt(match[1], 10);
+        const kHzValue = parseFloat(match[1]);
+        sampleRate = Math.round(kHzValue * 1e3);
       }
     });
     lame.on("close", (code) => {
@@ -496,7 +522,7 @@ async function decodeMP3(mp3Path) {
       for (let i = 0; i < floatArray.length; i++) {
         floatArray[i] = buffer.readInt16LE(i * 2) / 32768;
       }
-      console.log(`Decoded ${mp3Path}: ${floatArray.length} samples, ${sampleRate}Hz`);
+      logger.log(`Decoded ${mp3Path}: ${floatArray.length} samples, ${sampleRate}Hz`);
       resolve([floatArray, sampleRate]);
     });
     lame.on("error", (err) => {
@@ -563,12 +589,12 @@ async function saveMP3File(audio, index, sampleRate, options = {}) {
 }
 async function processMP3File(mp3Path, options = {}) {
   try {
-    const vad = await VAD.create(options);
-    const [audioData, sampleRate] = await decodeMP3(mp3Path);
+    const vad = options.vadInstance || await VAD.create(options);
+    const [audioData, detectedSampleRate] = await decodeMP3(mp3Path);
     const startTime = Date.now();
     const segments = [];
     const outputFiles = [];
-    for await (const segment of vad.run(audioData, sampleRate)) {
+    for await (const segment of vad.run(audioData, detectedSampleRate)) {
       segments.push(segment);
       if (options.saveFiles) {
         const outputPath = await saveMP3File(segment.audio, segments.length, TARGET_SAMPLE_RATE, {
@@ -584,10 +610,10 @@ async function processMP3File(mp3Path, options = {}) {
       outputFiles: options.saveFiles ? outputFiles : void 0,
       processingTime,
       audioData,
-      sampleRate
+      sampleRate: detectedSampleRate
     };
   } catch (error) {
-    console.error("Error processing MP3:", error);
+    logger.error("Error processing MP3:", error);
     throw error;
   }
 }

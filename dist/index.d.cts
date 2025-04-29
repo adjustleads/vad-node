@@ -116,6 +116,8 @@ interface ProcessMP3Options extends Partial<VADOptions> {
     outputDir?: string;
     /** Prefix for MP3 filenames */
     filePrefix?: string;
+    /** Optional pre-initialized VAD instance */
+    vadInstance?: VAD;
 }
 /**
  * Result of processing an MP3 file

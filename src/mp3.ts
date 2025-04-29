@@ -2,6 +2,7 @@ import * as fs from 'fs/promises'
 import { spawn } from 'child_process'
 import * as path from 'path'
 import { VAD, type SpeechSegment, type VADOptions, TARGET_SAMPLE_RATE } from './vad'
+import { logger } from './logger'
 
 /**
  * Options for MP3 processing
@@ -13,6 +14,8 @@ export interface ProcessMP3Options extends Partial<VADOptions> {
   outputDir?: string
   /** Prefix for MP3 filenames */
   filePrefix?: string
+  /** Optional pre-initialized VAD instance */
+  vadInstance?: VAD
 }
 
 /**
@@ -37,7 +40,7 @@ export interface ProcessMP3Result {
  * @returns Promise containing [audioData, sampleRate]
  */
 export async function decodeMP3(mp3Path: string): Promise<[Float32Array, number]> {
-  console.log(`Decoding MP3 file: ${mp3Path}`)
+  logger.log(`Decoding MP3 file: ${mp3Path}`)
 
   // First check if the file exists
   try {
@@ -71,10 +74,11 @@ export async function decodeMP3(mp3Path: string): Promise<[Float32Array, number]
       const output = data.toString()
       stderrOutput += output
 
-      // Try to extract sample rate from lame output
-      const match = output.match(/(\d+) Hz/)
+      // Try to extract sample rate from lame output, e.g., "(44.1 kHz,..." or "(22.05 kHz,..."
+      const match = output.match(/\((\d+(?:\.\d+)?)\s+kHz/)
       if (match && match[1]) {
-        sampleRate = parseInt(match[1], 10)
+        const kHzValue = parseFloat(match[1])
+        sampleRate = Math.round(kHzValue * 1000) // Convert kHz to Hz
       }
     })
 
@@ -98,7 +102,7 @@ export async function decodeMP3(mp3Path: string): Promise<[Float32Array, number]
         floatArray[i] = buffer.readInt16LE(i * 2) / 32768.0
       }
 
-      console.log(`Decoded ${mp3Path}: ${floatArray.length} samples, ${sampleRate}Hz`)
+      logger.log(`Decoded ${mp3Path}: ${floatArray.length} samples, ${sampleRate}Hz`)
       resolve([floatArray, sampleRate])
     })
 
@@ -197,11 +201,11 @@ export async function saveMP3File(
  */
 export async function processMP3File(mp3Path: string, options: ProcessMP3Options = {}): Promise<ProcessMP3Result> {
   try {
-    // Initialize the VAD with provided options
-    const vad = await VAD.create(options)
+    // Use provided VAD instance or create a new one
+    const vad = options.vadInstance || (await VAD.create(options))
 
     // Decode the MP3 file
-    const [audioData, sampleRate] = await decodeMP3(mp3Path)
+    const [audioData, detectedSampleRate] = await decodeMP3(mp3Path)
 
     // Process the audio with the VAD
     const startTime = Date.now()
@@ -209,11 +213,12 @@ export async function processMP3File(mp3Path: string, options: ProcessMP3Options
     const outputFiles: string[] = []
 
     // Collect all segments
-    for await (const segment of vad.run(audioData, sampleRate)) {
+    for await (const segment of vad.run(audioData, detectedSampleRate)) {
       segments.push(segment)
 
       // Save MP3 file if requested
       if (options.saveFiles) {
+        // Use the target sample rate for saving segments as VAD output is resampled
         const outputPath = await saveMP3File(segment.audio, segments.length, TARGET_SAMPLE_RATE, {
           outputDir: options.outputDir,
           filePrefix: options.filePrefix,
@@ -230,10 +235,10 @@ export async function processMP3File(mp3Path: string, options: ProcessMP3Options
       outputFiles: options.saveFiles ? outputFiles : undefined,
       processingTime,
       audioData,
-      sampleRate,
+      sampleRate: detectedSampleRate,
     }
   } catch (error) {
-    console.error('Error processing MP3:', error)
+    logger.error('Error processing MP3:', error)
     throw error
   }
 }
