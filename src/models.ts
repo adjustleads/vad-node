@@ -1,3 +1,5 @@
+import * as ort from 'onnxruntime-node'
+
 export type ONNXRuntimeAPI = any
 export type ModelFetcher = () => Promise<ArrayBuffer>
 export type OrtOptions = {
@@ -26,7 +28,6 @@ export class Silero implements Model {
   private _h: any
   private _c: any
   private _sr: any
-  private ort: any
   private modelBuffer: ArrayBuffer
 
   /**
@@ -34,9 +35,6 @@ export class Silero implements Model {
    * @param modelBuffer ArrayBuffer containing the ONNX model data
    */
   constructor(modelBuffer: ArrayBuffer) {
-    // Import ONNX runtime dynamically to avoid issues with browser compatibility
-    // We're in a Node.js environment, so this is safe
-    this.ort = require('onnxruntime-node')
     this.modelBuffer = modelBuffer
   }
 
@@ -56,10 +54,10 @@ export class Silero implements Model {
    */
   private async init(): Promise<void> {
     console.debug('Initializing Silero VAD model')
-    this._session = await this.ort.InferenceSession.create(this.modelBuffer)
+    this._session = await ort.InferenceSession.create(this.modelBuffer)
 
     // Set constant sample rate tensor (16kHz)
-    this._sr = new this.ort.Tensor('int64', [16000n])
+    this._sr = new ort.Tensor('int64', [16000n])
     this.reset_state()
     console.debug('Silero VAD model initialized')
   }
@@ -69,8 +67,8 @@ export class Silero implements Model {
    */
   reset_state = (): void => {
     const zeroes = Array(2 * 64).fill(0)
-    this._h = new this.ort.Tensor('float32', zeroes, [2, 1, 64])
-    this._c = new this.ort.Tensor('float32', zeroes, [2, 1, 64])
+    this._h = new ort.Tensor('float32', zeroes, [2, 1, 64])
+    this._c = new ort.Tensor('float32', zeroes, [2, 1, 64])
   }
 
   /**
@@ -80,7 +78,7 @@ export class Silero implements Model {
    */
   process = async (audioFrame: Float32Array): Promise<SpeechProbabilities> => {
     // Create tensor from audio frame
-    const t = new this.ort.Tensor('float32', audioFrame, [1, audioFrame.length])
+    const t = new ort.Tensor('float32', audioFrame, [1, audioFrame.length])
 
     // Prepare inputs for the model
     const inputs = {
