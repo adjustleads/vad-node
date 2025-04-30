@@ -2,6 +2,12 @@
 
 A Node.js library for Voice Activity Detection (VAD) using the Silero VAD model, designed for easy integration into Node.js applications. This package includes pre-built distribution files for straightforward usage directly from GitHub.
 
+## Development resources
+
+A list of useful links and things found when developing that might be relevant in the future:
+
+- https://colab.research.google.com/github/pyannote/pyannote-audio/blob/develop/tutorials/voice_activity_detection.ipynb
+
 ## Installation
 
 You can install this package directly from the `main` branch on GitHub. Since the compiled JavaScript files (`dist/` directory) are included in the repository, no build step is required after installation.

@@ -14,6 +14,7 @@ async function processWithHelper(mp3Path: string): Promise<void> {
     // Process the MP3 file with our helper function
     const result = await processMP3File(mp3Path, {
       // VAD options
+      modelPath: path.join(process.cwd(), 'pyannote.onnx'),
       positiveSpeechThreshold: 0.5,
       negativeSpeechThreshold: 0.3,
       // MP3 processing options

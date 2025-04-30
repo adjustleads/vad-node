@@ -1,0 +1,6 @@
+{
+  "feature_extractor_type": "PyAnnoteFeatureExtractor",
+  "processor_class": "PyAnnoteProcessor",
+  "sampling_rate": 16000,
+  "step": 270
+}

@@ -31,9 +31,14 @@
     "typescript": "^5.8.2"
   },
   "dependencies": {
-    "onnxruntime-node": "^1.21.1"
+    "@huggingface/transformers": "^3.5.0",
+    "onnxruntime-node": "^1.21.1",
+    "wavefile": "^11.0.0"
   },
   "trustedDependencies": [
-    "onnxruntime-node"
+    "esbuild",
+    "onnxruntime-node",
+    "protobufjs",
+    "sharp"
   ]
 }
