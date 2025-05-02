@@ -233,14 +233,14 @@ const concatArrays = (arrays: Float32Array[]): Float32Array => {
  * Extracts specific segments from an MP3, adds padding, and saves as a new MP3.
  * @param inputPath Path to the input MP3 file.
  * @param outputPath Path to save the resulting MP3 file.
- * @param segments Array of { start: number, end: number } timestamps in seconds.
+ * @param segments Array of { start: number, end: number } timestamps in milliseconds.
  * @param paddingMs Padding duration in milliseconds to add at the start, end, and between segments. Default is 500ms.
  * @returns Promise that resolves when the file is saved.
  */
 export async function processMP3Segments(
   inputPath: string,
   outputPath: string,
-  segments: { start: number; end: number }[],
+  segments: SpeechSegment[],
   paddingMs: number = 500,
 ): Promise<void> {
   try {
@@ -260,12 +260,13 @@ export async function processMP3Segments(
 
     // Extract and add segments with intermediate padding
     segments.forEach((segment, index) => {
-      const startSample = Math.floor(segment.start * sampleRate)
-      const endSample = Math.floor(segment.end * sampleRate)
+      // Calculate sample indices from timestamps (now in milliseconds)
+      const startSample = Math.floor((segment.start / 1000) * sampleRate)
+      const endSample = Math.floor((segment.end / 1000) * sampleRate)
 
       if (startSample >= endSample || endSample > audioData.length || startSample < 0) {
         logger.error(
-          `Invalid segment timestamp: start=${segment.start}s (${startSample}), end=${segment.end}s (${endSample}). Max samples: ${audioData.length}. Skipping segment.`,
+          `Invalid segment timestamp: start=${segment.start}ms (${startSample}), end=${segment.end}ms (${endSample}). Max samples: ${audioData.length}. Skipping segment.`,
         )
         return // Skip invalid segment
       }

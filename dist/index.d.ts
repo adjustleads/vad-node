@@ -136,14 +136,11 @@ declare function processMP3File(mp3Path: string, options?: ProcessMP3Options): P
  * Extracts specific segments from an MP3, adds padding, and saves as a new MP3.
  * @param inputPath Path to the input MP3 file.
  * @param outputPath Path to save the resulting MP3 file.
- * @param segments Array of { start: number, end: number } timestamps in seconds.
+ * @param segments Array of { start: number, end: number } timestamps in milliseconds.
  * @param paddingMs Padding duration in milliseconds to add at the start, end, and between segments. Default is 500ms.
  * @returns Promise that resolves when the file is saved.
  */
-declare function processMP3Segments(inputPath: string, outputPath: string, segments: {
-    start: number;
-    end: number;
-}[], paddingMs?: number): Promise<void>;
+declare function processMP3Segments(inputPath: string, outputPath: string, segments: SpeechSegment[], paddingMs?: number): Promise<void>;
 /**
  * Checks if lame is installed and available
  * @returns Promise that resolves if lame is available, rejects otherwise

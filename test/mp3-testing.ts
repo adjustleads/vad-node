@@ -40,16 +40,16 @@ async function processAndSaveSegments(mp3Path: string): Promise<void> {
     const outputPath = path.join(process.cwd(), 'output', 'processed_speech.mp3')
     console.log(`\nExtracting segments and saving to: ${outputPath}`) // Log output path
 
-    // Prepare segments in seconds for processMP3Segments
+    // Prepare segments in milliseconds for processMP3Segments (already in ms from VAD)
     const segmentsToExtract = vadResult.segments.map((seg) => ({
-      start: seg.start / 1000, // Convert ms to seconds
-      end: seg.end / 1000, // Convert ms to seconds
+      start: seg.start, // Already in milliseconds
+      end: seg.end, // Already in milliseconds
     }))
 
     await processMP3Segments(
       mp3Path, // Input file
       outputPath, // Output file
-      segmentsToExtract, // Segments to extract (start/end in seconds)
+      segmentsToExtract, // Segments to extract (start/end in ms)
       500, // Padding in milliseconds (default)
     )
 

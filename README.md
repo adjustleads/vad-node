@@ -143,7 +143,7 @@ findSpeechInMP3()
 
 ### 2. Extracting, Padding, and Saving MP3 Segments (`processMP3Segments`)
 
-This function takes an input MP3, a list of start/end timestamps (in seconds), extracts those segments, adds padding, concatenates them, and saves the result as a new MP3 file using the **original sample rate**.
+This function takes an input MP3, a list of start/end timestamps (in **milliseconds**), extracts those segments, adds padding, concatenates them, and saves the result as a new MP3 file using the **original sample rate**.
 
 ```javascript
 const { processMP3Segments, checkLameInstallation } = require('adjustleads-vad-node')
@@ -153,10 +153,10 @@ async function extractAndSaveSegments() {
   const inputMp3Path = 'path/to/your/input.mp3'
   const outputMp3Path = 'path/to/your/output_segments.mp3'
 
-  // Define the segments you want to extract (start and end times in seconds)
+  // Define the segments you want to extract (start and end times in **milliseconds**)
   const segmentsToExtract = [
-    { start: 10.5, end: 15.2 }, // Example: 10.5s to 15.2s
-    { start: 22.0, end: 25.8 }, // Example: 22.0s to 25.8s
+    { start: 10500, end: 15200 }, // Example: 10500ms to 15200ms
+    { start: 22000, end: 25800 }, // Example: 22000ms to 25800ms
     // Add more segments as needed
   ]
 
@@ -186,7 +186,7 @@ extractAndSaveSegments()
 
 **Combining VAD and Segment Extraction:**
 
-You can combine these two functions. First, use `processMP3File` to get the speech segment timestamps (in milliseconds). Then, convert these timestamps to seconds and pass them to `processMP3Segments` to create the final padded MP3 file.
+You can combine these two functions. First, use `processMP3File` to get the speech segment timestamps (in milliseconds). Then, pass these timestamps **directly** to `processMP3Segments` to create the final padded MP3 file.
 
 ```javascript
 // (Inside an async function after running processMP3File as in the first MP3 example)
@@ -195,17 +195,15 @@ You can combine these two functions. First, use `processMP3File` to get the spee
 
 if (vadResult.segments.length > 0) {
   const outputFilePath = 'path/to/final_speech.mp3'
-  const segmentsInSeconds = vadResult.segments.map((seg) => ({
-    start: seg.start / 1000,
-    end: seg.end / 1000,
-  }))
+  // Timestamps from vadResult.segments are already in milliseconds
+  const segmentsInMilliseconds = vadResult.segments // No conversion needed
 
   console.log('\nSaving detected speech segments with padding...')
   try {
     await processMP3Segments(
       mp3FilePath, // Original input path used for VAD
       outputFilePath,
-      segmentsInSeconds,
+      segmentsInMilliseconds, // Pass timestamps in ms
     )
     console.log(`Combined speech saved to ${outputFilePath}`)
   } catch (saveError) {

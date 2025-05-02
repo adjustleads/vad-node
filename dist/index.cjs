@@ -660,11 +660,11 @@ async function processMP3Segments(inputPath, outputPath, segments, paddingMs = 5
     const audioChunks = [];
     audioChunks.push(silencePadding);
     segments.forEach((segment, index) => {
-      const startSample = Math.floor(segment.start * sampleRate);
-      const endSample = Math.floor(segment.end * sampleRate);
+      const startSample = Math.floor(segment.start / 1e3 * sampleRate);
+      const endSample = Math.floor(segment.end / 1e3 * sampleRate);
       if (startSample >= endSample || endSample > audioData.length || startSample < 0) {
         logger.error(
-          `Invalid segment timestamp: start=${segment.start}s (${startSample}), end=${segment.end}s (${endSample}). Max samples: ${audioData.length}. Skipping segment.`
+          `Invalid segment timestamp: start=${segment.start}ms (${startSample}), end=${segment.end}ms (${endSample}). Max samples: ${audioData.length}. Skipping segment.`
         );
         return;
       }
