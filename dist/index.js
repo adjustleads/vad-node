@@ -1,19 +1,27 @@
+var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+}) : x)(function(x) {
+  if (typeof require !== "undefined") return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x + '" is not supported');
+});
+
 // src/vad.ts
 import * as fs from "fs/promises";
 
 // src/models.ts
-import * as ort from "onnxruntime-node";
 var Silero = class _Silero {
   _session;
   _h;
   _c;
   _sr;
+  ort;
   modelBuffer;
   /**
    * Creates a new instance of the Silero VAD model
    * @param modelBuffer ArrayBuffer containing the ONNX model data
    */
   constructor(modelBuffer) {
+    this.ort = __require("onnxruntime-node");
     this.modelBuffer = modelBuffer;
   }
   /**
@@ -31,8 +39,8 @@ var Silero = class _Silero {
    */
   async init() {
     console.debug("Initializing Silero VAD model");
-    this._session = await ort.InferenceSession.create(this.modelBuffer);
-    this._sr = new ort.Tensor("int64", [16000n]);
+    this._session = await this.ort.InferenceSession.create(this.modelBuffer);
+    this._sr = new this.ort.Tensor("int64", [16000n]);
     this.reset_state();
     console.debug("Silero VAD model initialized");
   }
@@ -41,8 +49,8 @@ var Silero = class _Silero {
    */
   reset_state = () => {
     const zeroes = Array(2 * 64).fill(0);
-    this._h = new ort.Tensor("float32", zeroes, [2, 1, 64]);
-    this._c = new ort.Tensor("float32", zeroes, [2, 1, 64]);
+    this._h = new this.ort.Tensor("float32", zeroes, [2, 1, 64]);
+    this._c = new this.ort.Tensor("float32", zeroes, [2, 1, 64]);
   };
   /**
    * Process an audio frame and determine speech probability
@@ -50,7 +58,7 @@ var Silero = class _Silero {
    * @returns Speech probability scores
    */
   process = async (audioFrame) => {
-    const t = new ort.Tensor("float32", audioFrame, [1, audioFrame.length]);
+    const t = new this.ort.Tensor("float32", audioFrame, [1, audioFrame.length]);
     const inputs = {
       input: t,
       h: this._h,
