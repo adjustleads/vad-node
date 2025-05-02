@@ -33,7 +33,8 @@ __export(index_exports, {
   Message: () => Message,
   VAD: () => VAD,
   checkLameInstallation: () => checkLameInstallation,
-  processMP3File: () => processMP3File
+  processMP3File: () => processMP3File,
+  processMP3Segments: () => processMP3Segments
 });
 module.exports = __toCommonJS(index_exports);
 
@@ -562,12 +563,10 @@ async function decodeMP3(mp3Path) {
     });
   });
 }
-async function saveMP3File(audio, sampleRate, options = {}) {
-  const outputDir = options.outputDir || process.cwd();
+async function saveMP3File(audio, sampleRate, outputPath) {
+  const outputDir = path.dirname(outputPath);
   await fs2.mkdir(outputDir, { recursive: true });
-  const filename = options.outputFilename ? options.outputFilename : `${options.filePrefix || "segment"}_${options.index ?? 0}.mp3`;
-  const outputPath = path.join(outputDir, filename);
-  const tempPcmPath = path.join(outputDir, `temp_${path.parse(filename).name}.pcm`);
+  const tempPcmPath = path.join(outputDir, `temp_${path.parse(outputPath).name}.pcm`);
   const buffer = Buffer.alloc(audio.length * 2);
   for (let i = 0; i < audio.length; i++) {
     const sample = Math.max(-1, Math.min(1, audio[i]));
@@ -597,7 +596,7 @@ async function saveMP3File(audio, sampleRate, options = {}) {
       tempPcmPath,
       // Input file
       outputPath
-      // Output file (using the determined filename)
+      // Output file (using the full path)
     ]);
     lame.on("close", async (code) => {
       try {
@@ -622,72 +621,70 @@ async function processMP3File(mp3Path, options = {}) {
     const [audioData, detectedSampleRate] = await decodeMP3(mp3Path);
     const startTime = Date.now();
     const segments = [];
-    const outputFiles = [];
-    const allAudioSegments = [];
     for await (const segment of vad.run(audioData, detectedSampleRate)) {
       segments.push(segment);
-      if (options.saveFiles) {
-        if (options.mergeOutputChunks) {
-          allAudioSegments.push(segment.audio);
-        } else {
-          const outputPath = await saveMP3File(
-            segment.audio,
-            TARGET_SAMPLE_RATE,
-            // VAD output is resampled
-            {
-              outputDir: options.outputDir,
-              filePrefix: options.filePrefix,
-              index: segments.length
-              // Pass index for default naming
-            }
-          );
-          outputFiles.push(outputPath);
-        }
-      }
-    }
-    if (options.saveFiles && options.mergeOutputChunks && allAudioSegments.length > 0) {
-      const paddingDurationSeconds = 0.5;
-      const paddingSamples = Math.floor(paddingDurationSeconds * TARGET_SAMPLE_RATE);
-      const silencePadding = new Float32Array(paddingSamples).fill(0);
-      let totalLength = 0;
-      allAudioSegments.forEach((segment) => {
-        totalLength += segment.length;
-      });
-      totalLength += Math.max(0, allAudioSegments.length - 1) * paddingSamples;
-      const mergedAudio = new Float32Array(totalLength);
-      let currentOffset = 0;
-      allAudioSegments.forEach((segment, index) => {
-        mergedAudio.set(segment, currentOffset);
-        currentOffset += segment.length;
-        if (index < allAudioSegments.length - 1) {
-          mergedAudio.set(silencePadding, currentOffset);
-          currentOffset += paddingSamples;
-        }
-      });
-      const mergedFilename = `${options.filePrefix || "merged_output"}.mp3`;
-      const mergedOutputPath = await saveMP3File(
-        mergedAudio,
-        TARGET_SAMPLE_RATE,
-        // VAD output rate
-        {
-          outputDir: options.outputDir,
-          outputFilename: mergedFilename
-          // Use specific filename
-        }
-      );
-      outputFiles.push(mergedOutputPath);
     }
     const processingTime = Date.now() - startTime;
     return {
       segments,
-      outputFiles: options.saveFiles ? outputFiles : void 0,
-      // Contains single or multiple paths
       processingTime,
       audioData,
       sampleRate: detectedSampleRate
     };
   } catch (error) {
-    logger.error("Error processing MP3:", error);
+    logger.error("Error processing MP3 for VAD:", error);
+    throw error;
+  }
+}
+var concatArrays2 = (arrays) => {
+  const sizes = arrays.reduce(
+    (out, next) => {
+      out.push(out.at(-1) + next.length);
+      return out;
+    },
+    [0]
+  );
+  const outArray = new Float32Array(sizes.at(-1));
+  arrays.forEach((arr, index) => {
+    const place = sizes[index];
+    outArray.set(arr, place);
+  });
+  return outArray;
+};
+async function processMP3Segments(inputPath, outputPath, segments, paddingMs = 500) {
+  try {
+    const [audioData, sampleRate] = await decodeMP3(inputPath);
+    logger.log(`Input MP3 decoded: ${audioData.length} samples, ${sampleRate}Hz`);
+    const paddingDurationSeconds = paddingMs / 1e3;
+    const paddingSamples = Math.floor(paddingDurationSeconds * sampleRate);
+    const silencePadding = new Float32Array(paddingSamples).fill(0);
+    const audioChunks = [];
+    audioChunks.push(silencePadding);
+    segments.forEach((segment, index) => {
+      const startSample = Math.floor(segment.start * sampleRate);
+      const endSample = Math.floor(segment.end * sampleRate);
+      if (startSample >= endSample || endSample > audioData.length || startSample < 0) {
+        logger.error(
+          `Invalid segment timestamp: start=${segment.start}s (${startSample}), end=${segment.end}s (${endSample}). Max samples: ${audioData.length}. Skipping segment.`
+        );
+        return;
+      }
+      const audioSegment = audioData.slice(startSample, endSample);
+      audioChunks.push(audioSegment);
+      if (index < segments.length - 1) {
+        audioChunks.push(silencePadding);
+      }
+    });
+    audioChunks.push(silencePadding);
+    if (audioChunks.length <= 2) {
+      throw new Error("No valid audio segments found to process.");
+    }
+    const mergedAudio = concatArrays2(audioChunks);
+    logger.log(`Merged audio created: ${mergedAudio.length} samples`);
+    await saveMP3File(mergedAudio, sampleRate, outputPath);
+    logger.log(`Output MP3 saved to: ${outputPath}`);
+  } catch (error) {
+    logger.error(`Error processing MP3 segments for ${inputPath}:`, error);
     throw error;
   }
 }
@@ -715,5 +712,6 @@ function checkLameInstallation() {
   Message,
   VAD,
   checkLameInstallation,
-  processMP3File
+  processMP3File,
+  processMP3Segments
 });

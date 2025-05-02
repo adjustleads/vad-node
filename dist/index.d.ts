@@ -107,29 +107,19 @@ declare class VAD {
 }
 
 /**
- * Options for MP3 processing
+ * Options for VAD processing of MP3s (no file saving)
  */
 interface ProcessMP3Options extends Partial<VADOptions> {
-    /** Whether to save audio segments as MP3 files */
-    saveFiles?: boolean;
-    /** Directory to save MP3 files (defaults to current working directory) */
-    outputDir?: string;
-    /** Prefix for MP3 filenames */
-    filePrefix?: string;
     /** Optional pre-initialized VAD instance */
     vadInstance?: VAD;
-    /** Merge all output segments into a single file with padding (requires saveFiles=true) */
-    mergeOutputChunks?: boolean;
 }
 /**
- * Result of processing an MP3 file
+ * Result of processing an MP3 file for VAD (no file saving)
  */
 interface ProcessMP3Result {
     /** Detected speech segments */
     segments: SpeechSegment[];
-    /** Paths to saved MP3 files (if saveFiles is true) */
-    outputFiles?: string[];
-    /** Total processing time in milliseconds */
+    /** Total VAD processing time in milliseconds */
     processingTime: number;
     /** Original audio data */
     audioData: Float32Array;
@@ -137,17 +127,29 @@ interface ProcessMP3Result {
     sampleRate: number;
 }
 /**
- * Process an MP3 file with the VAD
+ * Process an MP3 file with the VAD (does not save files)
  *
  * @param mp3Path Path to the MP3 file
  * @param options Processing options
- * @returns Promise with processing results
+ * @returns Promise with processing results (segments, times, audio data, sample rate)
  */
 declare function processMP3File(mp3Path: string, options?: ProcessMP3Options): Promise<ProcessMP3Result>;
+/**
+ * Extracts specific segments from an MP3, adds padding, and saves as a new MP3.
+ * @param inputPath Path to the input MP3 file.
+ * @param outputPath Path to save the resulting MP3 file.
+ * @param segments Array of { start: number, end: number } timestamps in seconds.
+ * @param paddingMs Padding duration in milliseconds to add at the start, end, and between segments. Default is 500ms.
+ * @returns Promise that resolves when the file is saved.
+ */
+declare function processMP3Segments(inputPath: string, outputPath: string, segments: {
+    start: number;
+    end: number;
+}[], paddingMs?: number): Promise<void>;
 /**
  * Checks if lame is installed and available
  * @returns Promise that resolves if lame is available, rejects otherwise
  */
 declare function checkLameInstallation(): Promise<void>;
 
-export { type FrameProcessorOptions, Message, type ProcessMP3Options, type SpeechSegment, VAD, type VADOptions, checkLameInstallation, processMP3File };
+export { type FrameProcessorOptions, Message, type ProcessMP3Options, type SpeechSegment, VAD, type VADOptions, checkLameInstallation, processMP3File, processMP3Segments };

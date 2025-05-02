@@ -1,56 +1,72 @@
+// bun test/mp3-testing.ts test/data/test.mp3
+
 import * as path from 'path'
-import { processMP3File, checkLameInstallation } from '../src'
+import { processMP3File, checkLameInstallation, processMP3Segments } from '../src'
 
 /**
- * Process an MP3 file with the simplified helper function
- * Demonstrates the easier high-level approach
- * @param mp3Path Path to the MP3 file
+ * Process an MP3 file with the VAD function and then extract/save segments.
+ * @param mp3Path Path to the input MP3 file
  */
-async function processWithHelper(mp3Path: string): Promise<void> {
+async function processAndSaveSegments(mp3Path: string): Promise<void> {
   try {
-    console.log('\n--- Helper function approach ---')
-    console.log('Processing MP3 file...')
+    console.log('\n--- VAD + Segment Extraction Approach ---')
+    console.log('Processing MP3 file for VAD...')
 
-    // Process the MP3 file with our helper function
-    const result = await processMP3File(mp3Path, {
-      // VAD options
+    // 1. Run VAD to get speech segments
+    const vadResult = await processMP3File(mp3Path, {
+      // VAD options (can be adjusted)
       positiveSpeechThreshold: 0.5,
-      negativeSpeechThreshold: 0.3,
-      // MP3 processing options
-      saveFiles: true,
-      mergeOutputChunks: true,
-      outputDir: path.join(process.cwd(), 'output'),
-      filePrefix: 'speech',
+      negativeSpeechThreshold: 0.35, // Example: use default or adjust
     })
 
-    // Display results
-    console.log(`Found ${result.segments.length} speech segments`)
-    console.log(`Processing time: ${result.processingTime}ms`)
+    // Display VAD results
+    console.log(`Found ${vadResult.segments.length} speech segments (VAD only)`) // Updated log
+    console.log(`VAD processing time: ${vadResult.processingTime}ms`) // Updated log
 
-    // Show information about each segment
-    result.segments.forEach((segment, i) => {
+    // Show information about each detected segment
+    vadResult.segments.forEach((segment, i) => {
       const durationMs = segment.end - segment.start
       console.log(
-        `Speech segment ${i + 1}: Start=${segment.start.toFixed(0)}ms, End=${segment.end.toFixed(0)}ms, Duration=${durationMs.toFixed(0)}ms, Samples=${segment.audio.length}`,
+        `Speech segment ${i + 1}: Start=${segment.start.toFixed(0)}ms, End=${segment.end.toFixed(0)}ms, Duration=${durationMs.toFixed(0)}ms`,
       )
-
-      if (result.outputFiles) {
-        console.log(`  Saved as: ${result.outputFiles[i]}`)
-      }
     })
+
+    if (vadResult.segments.length === 0) {
+      console.log('No speech segments detected, skipping segment extraction.')
+      return
+    }
+
+    // 2. Extract segments, add padding, and save to a new file
+    const outputPath = path.join(process.cwd(), 'output', 'processed_speech.mp3')
+    console.log(`\nExtracting segments and saving to: ${outputPath}`) // Log output path
+
+    // Prepare segments in seconds for processMP3Segments
+    const segmentsToExtract = vadResult.segments.map((seg) => ({
+      start: seg.start / 1000, // Convert ms to seconds
+      end: seg.end / 1000, // Convert ms to seconds
+    }))
+
+    await processMP3Segments(
+      mp3Path, // Input file
+      outputPath, // Output file
+      segmentsToExtract, // Segments to extract (start/end in seconds)
+      500, // Padding in milliseconds (default)
+    )
+
+    console.log('Segments extracted, padded, and saved successfully.')
   } catch (error) {
     console.error('Error processing MP3:', error)
   }
 }
 
-// Main function to run both approaches
+// Main function to run the test
 async function main(mp3Path: string) {
   try {
     // Check if lame is installed
     await checkLameInstallation()
 
-    // run helper function
-    await processWithHelper(mp3Path)
+    // Run the combined VAD + extraction test
+    await processAndSaveSegments(mp3Path)
 
     console.log('\nAll tests completed successfully')
   } catch (error: unknown) {

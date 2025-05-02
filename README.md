@@ -21,7 +21,7 @@ Alternatively, for development purposes, clone the repository (see Development s
 ## Dependencies
 
 - **[onnxruntime-node](https://www.npmjs.com/package/onnxruntime-node):** Required for running the Silero VAD ONNX model. This is listed as a peer dependency and needs to be installed alongside this package.
-- **[lame](http://lame.sourceforge.net/):** (Optional) Required _only_ if you use the `processMP3File` function. It must be installed system-wide (e.g., via `apt install lame`, `brew install lame`).
+- **[lame](http://lame.sourceforge.net/):** Required if you use the MP3 processing functions (`processMP3File` or `processMP3Segments`). It must be installed system-wide (e.g., via `apt install lame`, `brew install lame`).
 
 Ensure you install the peer dependency:
 
@@ -29,7 +29,9 @@ Ensure you install the peer dependency:
 npm install onnxruntime-node
 ```
 
-## Basic Usage
+## Basic Usage (VAD Only)
+
+This example shows how to use the core VAD functionality to detect speech segments in audio data (represented as a `Float32Array`).
 
 ```javascript
 const { VAD } = require('adjustleads-vad-node') // Use the package name as defined in package.json
@@ -40,7 +42,7 @@ async function detectSpeech() {
     // Create a VAD instance with default or custom options
     const vad = await VAD.create({
       modelPath: 'node_modules/adjustleads-vad-node/silero_vad.onnx', // Default path relative to execution
-      // Optional overrides:
+      // Optional VAD parameter overrides:
       // positiveSpeechThreshold: 0.6,
       // negativeSpeechThreshold: 0.4,
       // minSpeechFrames: 4,
@@ -71,11 +73,10 @@ async function detectSpeech() {
 Speech Segment ${segmentCount}:`)
       console.log(` - Start Time: ${start.toFixed(0)} ms`)
       console.log(` - End Time: ${end.toFixed(0)} ms`)
-      console.log(` - Segment Length: ${audio.length} samples (at 16kHz)`)
+      console.log(` - Segment Length: ${audio.length} samples (at 16kHz)`) // VAD output is always 16kHz
 
       // 'audio' contains the Float32Array data for the detected speech segment (at 16kHz)
-      // You can now process, analyze, or save this segment.
-      // Example: saveSegmentToFile(audio, segmentCount);
+      // You can now process, analyze, or work with this segment.
     }
 
     if (segmentCount === 0) {
@@ -91,81 +92,150 @@ detectSpeech()
 
 _Note:_ Adjust the `modelPath` in `VAD.create` if `silero_vad.onnx` is not located at the default path relative to where your script is run. It's included in the package, so referencing it within `node_modules` is often reliable.
 
-## MP3 Processing (Optional)
+## MP3 Processing Utilities
 
-The library includes a utility function to process MP3 files directly, provided `lame` is installed on your system.
+The library includes utility functions to process MP3 files directly, provided `lame` is installed on your system.
+
+### 1. Detecting Speech Segments in MP3 (`processMP3File`)
+
+This function decodes an MP3, runs VAD, and returns the detected speech segments along with the original audio data and sample rate. It **does not** save any files itself.
 
 ```javascript
-const { processMP3File, checkLameInstallation } = require('adjustleads-vad-node');
-const path = require('path');
+const { processMP3File, checkLameInstallation } = require('adjustleads-vad-node')
 
-async function processSpeechInMP3() {
-  const mp3FilePath = 'path/to/your/audio.mp3'; // Specify the path to your MP3 file
-  const outputDirectory = './segments'; // Directory to save detected segments
+async function findSpeechInMP3() {
+  const mp3FilePath = 'path/to/your/audio.mp3' // Specify the path to your MP3 file
 
   try {
-    // 1. Check if lame is installed (optional but recommended)
-    await checkLameInstallation();
-    console.log("LAME installation confirmed.");
+    // 1. Check if lame is installed (recommended)
+    await checkLameInstallation()
+    console.log('LAME installation confirmed.')
 
-    // Ensure output directory exists
-    // await fs.promises.mkdir(outputDirectory, { recursive: true }); // Requires Node.js v10+
-
-    // 2. Process the MP3 file
-    console.log(`Processing MP3 file: ${mp3FilePath}`);
+    // 2. Process the MP3 file to find speech segments
+    console.log(`Processing MP3 for VAD: ${mp3FilePath}`)
     const result = await processMP3File(mp3FilePath, {
-      // VAD options (can override defaults)
+      // Optional: Override VAD parameters if needed
       // positiveSpeechThreshold: 0.6,
-
-      // MP3 processing options
-      saveFiles: true,           // Save detected segments as separate MP3 files
-      outputDir: outputDirectory, // Directory to save the files
-      filePrefix: 'speech_segment', // Prefix for the output filenames
-    });
+    })
 
     // 3. Display results
     console.log(`
-Processing complete. Found ${result.segments.length} speech segments.`);
-    console.log(`Total processing time: ${result.processingTime} ms`);
+Processing complete. Found ${result.segments.length} speech segments.`)
+    console.log(`Total VAD processing time: ${result.processingTime} ms`)
+    console.log(`Original Sample Rate: ${result.sampleRate} Hz`)
 
     result.segments.forEach((segment, i) => {
-      console.log(` - Segment ${i + 1}: ${segment.start.toFixed(0)}ms - ${segment.end.toFixed(0)}ms`);
-      // 'segment.audio' contains the Float32Array data (16kHz mono)
-    });
+      console.log(` - Segment ${i + 1}: ${segment.start.toFixed(0)}ms - ${segment.end.toFixed(0)}ms`)
+      // 'segment.audio' contains the Float32Array data (16kHz mono) for this segment
+    })
 
-    if (result.outputFiles && result.outputFiles.length > 0) {
-      console.log(`
-Segments saved to: ${outputDirectory}`);
-      result.outputFiles.forEach((filePath, i) => {
-        console.log(` - ${path.basename(filePath)}`);
-      });
-    }
-
+    // The full decoded audio is available if needed:
+    // console.log('Full audio data length:', result.audioData.length);
   } catch (error) {
-    console.error('
-Error during MP3 processing:', error.message);
-    if (error.message.includes('lame command failed')) {
-        console.error("Ensure 'lame' is installed and accessible in your system's PATH.");
+    console.error('\nError during MP3 VAD processing:', error.message)
+    if (error.message.includes('lame')) {
+      console.error("Ensure 'lame' is installed and accessible in your system's PATH.")
     }
   }
 }
 
-processSpeechInMP3();
+findSpeechInMP3()
+```
+
+### 2. Extracting, Padding, and Saving MP3 Segments (`processMP3Segments`)
+
+This function takes an input MP3, a list of start/end timestamps (in seconds), extracts those segments, adds padding, concatenates them, and saves the result as a new MP3 file using the **original sample rate**.
+
+```javascript
+const { processMP3Segments, checkLameInstallation } = require('adjustleads-vad-node')
+const path = require('path')
+
+async function extractAndSaveSegments() {
+  const inputMp3Path = 'path/to/your/input.mp3'
+  const outputMp3Path = 'path/to/your/output_segments.mp3'
+
+  // Define the segments you want to extract (start and end times in seconds)
+  const segmentsToExtract = [
+    { start: 10.5, end: 15.2 }, // Example: 10.5s to 15.2s
+    { start: 22.0, end: 25.8 }, // Example: 22.0s to 25.8s
+    // Add more segments as needed
+  ]
+
+  // Optional: Specify padding in milliseconds (default is 500ms)
+  const paddingMs = 500
+
+  try {
+    // 1. Check if lame is installed (required)
+    await checkLameInstallation()
+    console.log('LAME installation confirmed.')
+
+    // 2. Process the segments
+    console.log(`Extracting segments from ${inputMp3Path}...`)
+    await processMP3Segments(inputMp3Path, outputMp3Path, segmentsToExtract, paddingMs)
+
+    console.log(`\nSegments extracted, padded, and saved to: ${outputMp3Path}`)
+  } catch (error) {
+    console.error('\nError processing MP3 segments:', error.message)
+    if (error.message.includes('lame')) {
+      console.error("Ensure 'lame' is installed and accessible in your system's PATH.")
+    }
+  }
+}
+
+extractAndSaveSegments()
+```
+
+**Combining VAD and Segment Extraction:**
+
+You can combine these two functions. First, use `processMP3File` to get the speech segment timestamps (in milliseconds). Then, convert these timestamps to seconds and pass them to `processMP3Segments` to create the final padded MP3 file.
+
+```javascript
+// (Inside an async function after running processMP3File as in the first MP3 example)
+
+// ... assume 'vadResult' contains the output from processMP3File
+
+if (vadResult.segments.length > 0) {
+  const outputFilePath = 'path/to/final_speech.mp3'
+  const segmentsInSeconds = vadResult.segments.map((seg) => ({
+    start: seg.start / 1000,
+    end: seg.end / 1000,
+  }))
+
+  console.log('\nSaving detected speech segments with padding...')
+  try {
+    await processMP3Segments(
+      mp3FilePath, // Original input path used for VAD
+      outputFilePath,
+      segmentsInSeconds,
+    )
+    console.log(`Combined speech saved to ${outputFilePath}`)
+  } catch (saveError) {
+    console.error('Error saving segments:', saveError.message)
+  }
+}
 ```
 
 ## Architecture Overview
 
 The library uses the following main components:
 
-1.  **`VAD` Class:** Main entry point. Manages configuration and orchestrates the processing pipeline.
-2.  **`SileroVad` Class:** Wraps the ONNX runtime session, loads the `silero_vad.onnx` model, and performs inference on audio frames.
-3.  **`FrameProcessor` Class:** Takes audio chunks, manages resampling (if necessary) to the required 16kHz, frames the audio, sends frames to `SileroVad`, and applies the core VAD logic (thresholding, silence detection, segment buffering).
-4.  **`Resampler` Class:** Handles downsampling audio to 16kHz if the input sample rate differs.
-5.  **`MP3Processor` (`processMP3File` function):** Utility using the external `lame` tool to decode MP3s, process the audio with `VAD`, and optionally re-encode segments back to MP3.
+1.  **`VAD` Class:** Main entry point for VAD. Manages configuration and orchestrates the processing pipeline.
+2.  **`Silero` Class:** Wraps the ONNX runtime session, loads the `silero_vad.onnx` model, and performs inference on audio frames.
+3.  **`FrameProcessor` Class:** Takes audio chunks, applies the core VAD logic (thresholding, silence detection, segment buffering) based on model output.
+4.  **`Resampler` Class:** Handles downsampling audio to 16kHz (required by the model) if the input sample rate differs.
+5.  **MP3 Utilities (`src/mp3.ts`):**
+    - `decodeMP3`: Uses external `lame` tool to decode MP3 to raw PCM (`Float32Array`).
+    - `saveMP3File`: Uses external `lame` to encode raw PCM (`Float32Array`) to MP3.
+    - `processMP3File`: Combines `decodeMP3` and `VAD.run` to find speech segments in an MP3.
+    - `processMP3Segments`: Combines `decodeMP3`, segment slicing/padding, and `saveMP3File` to create a new MP3 from specified time segments.
 
-**Data Flow (`VAD.run`):** Audio Chunk -> Resampler (if needed) -> Frame Processor -> SileroVad (for inference) -> Frame Processor (segment detection logic) -> Output Speech Segments (async generator).
+**Data Flow (`VAD.run`):** Audio Chunk -> Resampler (if needed) -> Frame Processor -> Silero (for inference) -> Frame Processor (segment detection logic) -> Output Speech Segments (async generator).
+
+**Data Flow (`processMP3Segments`):** Input MP3 Path -> `decodeMP3` -> Slice/Pad Audio Data -> `saveMP3File` -> Output MP3 Path.
 
 ## Configuration Options (`VAD.create` options)
+
+These options apply to the core VAD logic used by both `VAD.run` and `processMP3File`.
 
 | Option                    | Description                                                             | Default             |
 | :------------------------ | :---------------------------------------------------------------------- | :------------------ |
@@ -179,10 +249,11 @@ The library uses the following main components:
 
 ## Performance Considerations
 
-- The Silero VAD model operates on 16kHz mono audio. The library handles resampling from other sample rates.
-- Processing occurs in chunks, making it memory-efficient for large inputs.
-- The ONNX Runtime performs the core neural network inference.
-- MP3 processing involves external calls to `lame`, adding overhead for decoding/encoding.
+- The Silero VAD model operates on 16kHz mono audio. The library handles resampling from other sample rates for VAD.
+- MP3 processing (`decodeMP3`, `saveMP3File`, `processMP3Segments`) involves external calls to `lame`, adding overhead.
+- `processMP3Segments` saves the output MP3 using the _original sample rate_ of the input file.
+- VAD processing occurs in chunks, making it memory-efficient for large inputs.
+- The ONNX Runtime performs the core neural network inference for VAD.
 
 ## Development / Building Locally
 
