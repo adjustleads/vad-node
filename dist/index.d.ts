@@ -61,8 +61,6 @@ interface FrameProcessorOptions {
  * Represents a segment of speech detected by the VAD
  */
 interface SpeechSegment {
-    /** Audio samples containing the detected speech */
-    audio: Float32Array;
     /** Start time of the speech segment in milliseconds */
     start: number;
     /** End time of the speech segment in milliseconds */
@@ -117,7 +115,7 @@ interface ProcessMP3Options extends Partial<VADOptions> {
  * Result of processing an MP3 file for VAD (no file saving)
  */
 interface ProcessMP3Result {
-    /** Detected speech segments */
+    /** Detected speech segments (only start and end times) */
     segments: SpeechSegment[];
     /** Total VAD processing time in milliseconds */
     processingTime: number;

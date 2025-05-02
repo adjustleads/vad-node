@@ -456,7 +456,7 @@ var VAD = class _VAD {
         case "SPEECH_END" /* SpeechEnd */:
           end = (frameIndex + 1) * this.options.frameSamples / (TARGET_SAMPLE_RATE / 1e3);
           if (audio2) {
-            yield { audio: audio2, start, end };
+            yield { start, end };
           }
           break;
       }
@@ -466,7 +466,6 @@ var VAD = class _VAD {
     if (msg === "SPEECH_END" /* SpeechEnd */ && audio && audio.length > 0) {
       end = frameIndex * this.options.frameSamples / (TARGET_SAMPLE_RATE / 1e3);
       yield {
-        audio,
         start,
         end
       };

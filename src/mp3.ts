@@ -16,7 +16,7 @@ export interface ProcessMP3Options extends Partial<VADOptions> {
  * Result of processing an MP3 file for VAD (no file saving)
  */
 export interface ProcessMP3Result {
-  /** Detected speech segments */
+  /** Detected speech segments (only start and end times) */
   segments: SpeechSegment[]
   /** Total VAD processing time in milliseconds */
   processingTime: number
@@ -188,7 +188,7 @@ export async function processMP3File(mp3Path: string, options: ProcessMP3Options
     const startTime = Date.now()
     const segments: SpeechSegment[] = []
 
-    // Collect all segments
+    // Collect all segments (only start and end times)
     for await (const segment of vad.run(audioData, detectedSampleRate)) {
       segments.push(segment)
     }
@@ -270,6 +270,8 @@ export async function processMP3Segments(
         return // Skip invalid segment
       }
 
+      // Note: audioSegment is Float32Array, but SpeechSegment no longer holds audio data.
+      // The VAD result provides start/end times, which we use here.
       const audioSegment = audioData.slice(startSample, endSample)
       audioChunks.push(audioSegment)
 

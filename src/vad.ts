@@ -18,8 +18,6 @@ export const TARGET_SAMPLE_RATE = 16000
  * Represents a segment of speech detected by the VAD
  */
 export interface SpeechSegment {
-  /** Audio samples containing the detected speech */
-  audio: Float32Array
   /** Start time of the speech segment in milliseconds */
   start: number
   /** End time of the speech segment in milliseconds */
@@ -144,9 +142,9 @@ export class VAD {
           // Calculate end time in milliseconds
           end = ((frameIndex + 1) * this.options.frameSamples) / (TARGET_SAMPLE_RATE / 1000)
 
-          // Yield the detected speech segment
+          // Yield the detected speech segment timestamps
           if (audio) {
-            yield { audio, start, end }
+            yield { start, end }
           }
           break
       }
@@ -162,7 +160,6 @@ export class VAD {
       end = (frameIndex * this.options.frameSamples) / (TARGET_SAMPLE_RATE / 1000)
 
       yield {
-        audio,
         start,
         end,
       }

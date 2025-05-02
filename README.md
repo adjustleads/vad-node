@@ -67,16 +67,14 @@ async function detectSpeech() {
 
     // Process audio data asynchronously to get speech segments
     let segmentCount = 0
-    for await (const { audio, start, end } of vad.run(audioData, originalSampleRate)) {
+    for await (const { start, end } of vad.run(audioData, originalSampleRate)) {
       segmentCount++
       console.log(`
 Speech Segment ${segmentCount}:`)
       console.log(` - Start Time: ${start.toFixed(0)} ms`)
       console.log(` - End Time: ${end.toFixed(0)} ms`)
-      console.log(` - Segment Length: ${audio.length} samples (at 16kHz)`) // VAD output is always 16kHz
-
-      // 'audio' contains the Float32Array data for the detected speech segment (at 16kHz)
-      // You can now process, analyze, or work with this segment.
+      // 'start' and 'end' provide the timestamps for the detected speech segment.
+      // The raw audio for the segment is not included here.
     }
 
     if (segmentCount === 0) {
@@ -98,7 +96,7 @@ The library includes utility functions to process MP3 files directly, provided `
 
 ### 1. Detecting Speech Segments in MP3 (`processMP3File`)
 
-This function decodes an MP3, runs VAD, and returns the detected speech segments along with the original audio data and sample rate. It **does not** save any files itself.
+This function decodes an MP3, runs VAD, and returns the detected speech segment _timestamps_ along with the original audio data and sample rate. It **does not** save any files itself.
 
 ```javascript
 const { processMP3File, checkLameInstallation } = require('adjustleads-vad-node')
@@ -126,7 +124,8 @@ Processing complete. Found ${result.segments.length} speech segments.`)
 
     result.segments.forEach((segment, i) => {
       console.log(` - Segment ${i + 1}: ${segment.start.toFixed(0)}ms - ${segment.end.toFixed(0)}ms`)
-      // 'segment.audio' contains the Float32Array data (16kHz mono) for this segment
+      // The VAD process only returns start/end timestamps now.
+      // The full audio data is available in result.audioData if needed.
     })
 
     // The full decoded audio is available if needed:
@@ -226,10 +225,10 @@ The library uses the following main components:
 5.  **MP3 Utilities (`src/mp3.ts`):**
     - `decodeMP3`: Uses external `lame` tool to decode MP3 to raw PCM (`Float32Array`).
     - `saveMP3File`: Uses external `lame` to encode raw PCM (`Float32Array`) to MP3.
-    - `processMP3File`: Combines `decodeMP3` and `VAD.run` to find speech segments in an MP3.
-    - `processMP3Segments`: Combines `decodeMP3`, segment slicing/padding, and `saveMP3File` to create a new MP3 from specified time segments.
+    - `processMP3File`: Combines `decodeMP3` and `VAD.run` to find speech segment _timestamps_ in an MP3.
+    - `processMP3Segments`: Combines `decodeMP3`, segment slicing/padding (using the original audio data), and `saveMP3File` to create a new MP3 from specified time segments.
 
-**Data Flow (`VAD.run`):** Audio Chunk -> Resampler (if needed) -> Frame Processor -> Silero (for inference) -> Frame Processor (segment detection logic) -> Output Speech Segments (async generator).
+**Data Flow (`VAD.run`):** Audio Chunk -> Resampler (if needed) -> Frame Processor -> Silero (for inference) -> Frame Processor (segment detection logic) -> Output Speech Segment Timestamps (`{start, end}`) (async generator).
 
 **Data Flow (`processMP3Segments`):** Input MP3 Path -> `decodeMP3` -> Slice/Pad Audio Data -> `saveMP3File` -> Output MP3 Path.
 
