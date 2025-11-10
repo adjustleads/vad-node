@@ -31,7 +31,7 @@
     "typescript": "^5.8.2"
   },
   "dependencies": {
-    "onnxruntime-node": "^1.21.1"
+    "onnxruntime-node": "^1.23.2"
   },
   "trustedDependencies": [
     "onnxruntime-node"
